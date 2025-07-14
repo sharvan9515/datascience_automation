@@ -1,15 +1,87 @@
+import os
 import pandas as pd
 from automation.pipeline_state import PipelineState
 
 
+def _query_llm(prompt: str) -> str | None:
+    """Return raw LLM response or None if call fails."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return None
+    try:
+        import openai
+    except Exception:
+        return None
+
+    openai.api_key = api_key
+    try:
+        resp = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+        )
+        return resp.choices[0].message["content"].strip()
+    except Exception:
+        return None
+
+
 def run(state: PipelineState) -> PipelineState:
-    if state.task_type != 'classification':
-        corr = state.df.corr()[state.target].drop(state.target).abs().sort_values(ascending=False)
+    """Compute correlations/outliers and summarize via LLM."""
+    df = state.df.copy()
+
+    # Prepare numeric dataframe for correlation calculations
+    numeric_df = df.select_dtypes(exclude="object").copy()
+    if state.task_type == "classification" and state.target in df.columns:
+        numeric_df[state.target] = df[state.target].astype("category").cat.codes
+    elif state.target in df.columns:
+        numeric_df[state.target] = df[state.target]
+
+    corr_matrix = numeric_df.corr()
+    if state.target in corr_matrix:
+        target_corr = (
+            corr_matrix[state.target]
+            .drop(state.target)
+            .abs()
+            .sort_values(ascending=False)
+        )
     else:
-        # For classification, use numeric encoding for correlation
-        df = state.df.copy()
-        df[state.target] = df[state.target].astype('category').cat.codes
-        corr = df.corr()[state.target].drop(state.target).abs().sort_values(ascending=False)
-    top = corr.head(5)
-    state.append_log(f"CorrelationEDA: top correlated features: {', '.join(top.index)}")
+        target_corr = pd.Series(dtype=float)
+    top_corr = target_corr.head(5)
+
+    # Identify highly correlated feature pairs (possible redundancy)
+    redundant = []
+    cols = [c for c in numeric_df.columns if c != state.target]
+    for i, c1 in enumerate(cols):
+        for c2 in cols[i + 1 :]:
+            if abs(corr_matrix.loc[c1, c2]) > 0.85:
+                redundant.append((c1, c2))
+
+    # Simple outlier detection using z-score
+    outlier_counts = {}
+    for col in cols:
+        col_z = ((numeric_df[col] - numeric_df[col].mean()) / (numeric_df[col].std() + 1e-6)).abs()
+        outlier_counts[col] = int((col_z > 3).sum())
+
+    # Build prompt for LLM summarization
+    prompt = (
+        "You are an expert data analyst. "
+        "Given the following correlation information and outlier counts, "
+        "suggest any features that may be redundant due to high correlation or "
+        "particularly predictive of the target. "
+        "Respond in a short paragraph.\n"
+        f"Top target correlations: {top_corr.to_dict()}\n"
+        f"Highly correlated feature pairs: {redundant}\n"
+        f"Outlier counts: {outlier_counts}"
+    )
+
+    summary = _query_llm(prompt)
+    if not summary:
+        # Basic fallback summary
+        summary = (
+            f"Top correlations with {state.target}: "
+            + ", ".join(f"{k}={v:.2f}" for k, v in top_corr.items())
+        )
+        if redundant:
+            summary += ". Redundant pairs: " + ", ".join(f"{a}-{b}" for a, b in redundant[:3])
+    state.append_log(f"CorrelationEDA: {summary}")
     return state
