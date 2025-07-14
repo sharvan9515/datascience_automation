@@ -13,5 +13,7 @@ def run(state: PipelineState) -> PipelineState:
         state.df = df[[state.target]].join(
             pd.DataFrame(components, columns=comp_cols, index=df.index)
         )
-        state.log.append(f"FeatureReduction: applied PCA to {len(feature_cols)} features -> {len(comp_cols)} components")
+        state.append_log(
+            f"FeatureReduction: applied PCA to {len(feature_cols)} features -> {len(comp_cols)} components"
+        )
     return state

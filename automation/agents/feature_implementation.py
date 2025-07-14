@@ -8,6 +8,6 @@ def run(state: PipelineState) -> PipelineState:
             num1, num2 = feat.split('_over_')
             if num1 in df.columns and num2 in df.columns:
                 df[feat] = df[num1] / (df[num2] + 1e-6)
-                state.log.append(f"FeatureImplementation: created {feat}")
+                state.append_log(f"FeatureImplementation: created {feat}")
     state.df = df
     return state

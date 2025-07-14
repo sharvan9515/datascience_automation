@@ -10,6 +10,16 @@ def run_pipeline(csv_path: str, target: str):
     return state
 
 
+def compile_log(state: PipelineState) -> str:
+    """Return the pipeline log as a single formatted string."""
+    return "\n".join(state.log)
+
+
+def print_final_log(state: PipelineState) -> None:
+    """Print the collected pipeline log entries."""
+    print(compile_log(state))
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Run data science automation pipeline")
@@ -17,5 +27,4 @@ if __name__ == "__main__":
     parser.add_argument("target", help="Target column name")
     args = parser.parse_args()
     final_state = run_pipeline(args.csv, args.target)
-    for entry in final_state.log:
-        print(entry)
+    print_final_log(final_state)

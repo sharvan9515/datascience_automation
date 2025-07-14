@@ -11,5 +11,5 @@ def run(state: PipelineState) -> PipelineState:
         df[state.target] = df[state.target].astype('category').cat.codes
         corr = df.corr()[state.target].drop(state.target).abs().sort_values(ascending=False)
     top = corr.head(5)
-    state.log.append(f"CorrelationEDA: top correlated features: {', '.join(top.index)}")
+    state.append_log(f"CorrelationEDA: top correlated features: {', '.join(top.index)}")
     return state
