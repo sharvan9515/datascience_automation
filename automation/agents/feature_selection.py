@@ -17,5 +17,5 @@ def run(state: PipelineState) -> PipelineState:
         model = LinearRegression()
         model.fit(X_train, y_train)
         score = r2_score(y_test, model.predict(X_test))
-    state.log.append(f"FeatureSelection: baseline score {score:.4f}")
+    state.append_log(f"FeatureSelection: baseline score {score:.4f}")
     return state

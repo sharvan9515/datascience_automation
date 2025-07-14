@@ -7,5 +7,5 @@ def run(state: PipelineState) -> PipelineState:
         state.task_type = 'classification'
     else:
         state.task_type = 'regression'
-    state.log.append(f"TaskIdentification: determined task_type={state.task_type}")
+    state.append_log(f"TaskIdentification: determined task_type={state.task_type}")
     return state

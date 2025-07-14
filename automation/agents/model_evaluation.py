@@ -14,11 +14,11 @@ def run(state: PipelineState) -> PipelineState:
         model.fit(X_train, y_train)
         preds = model.predict(X_test)
         report = classification_report(y_test, preds)
-        state.log.append(f"ModelEvaluation:\n{report}")
+        state.append_log(f"ModelEvaluation:\n{report}")
     else:
         model = LinearRegression()
         model.fit(X_train, y_train)
         preds = model.predict(X_test)
         mse = mean_squared_error(y_test, preds)
-        state.log.append(f"ModelEvaluation: mse={mse:.4f}")
+        state.append_log(f"ModelEvaluation: mse={mse:.4f}")
     return state

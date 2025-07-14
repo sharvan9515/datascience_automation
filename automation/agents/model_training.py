@@ -13,10 +13,10 @@ def run(state: PipelineState) -> PipelineState:
         model = LogisticRegression(max_iter=200)
         model.fit(X_train, y_train)
         score = accuracy_score(y_test, model.predict(X_test))
-        state.log.append(f"ModelTraining: LogisticRegression accuracy={score:.4f}")
+        state.append_log(f"ModelTraining: LogisticRegression accuracy={score:.4f}")
     else:
         model = LinearRegression()
         model.fit(X_train, y_train)
         score = r2_score(y_test, model.predict(X_test))
-        state.log.append(f"ModelTraining: LinearRegression r2={score:.4f}")
+        state.append_log(f"ModelTraining: LinearRegression r2={score:.4f}")
     return state
