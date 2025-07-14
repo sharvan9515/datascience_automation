@@ -1,19 +1,105 @@
+"""Decide on and apply dimensionality reduction."""
+
+from __future__ import annotations
+
+import json
+import os
 import pandas as pd
 from automation.pipeline_state import PipelineState
 from sklearn.decomposition import PCA
 
 
+def _query_llm(prompt: str) -> str | None:
+    """Return raw LLM response or ``None`` if the call fails."""
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return None
+    try:
+        import openai
+    except Exception:
+        return None
+
+    openai.api_key = api_key
+    try:
+        resp = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+        )
+        return resp.choices[0].message["content"].strip()
+    except Exception:
+        return None
+
+
 def run(state: PipelineState) -> PipelineState:
+    """Consult an LLM on PCA usage and apply if recommended."""
+
     df = state.df
     feature_cols = [c for c in df.columns if c != state.target]
-    if len(feature_cols) > 15:
-        pca = PCA(n_components=0.9)
+    if not feature_cols:
+        return state
+
+    # measure simple multicollinearity
+    numeric_df = df[feature_cols].select_dtypes(exclude="object")
+    corr_matrix = numeric_df.corr().abs()
+    high_corr_pairs = 0
+    cols = list(corr_matrix.columns)
+    for i, c1 in enumerate(cols):
+        for c2 in cols[i + 1 :]:
+            if corr_matrix.loc[c1, c2] > 0.85:
+                high_corr_pairs += 1
+    total_pairs = len(cols) * (len(cols) - 1) / 2 or 1
+    high_corr_ratio = high_corr_pairs / total_pairs
+
+    prompt = (
+        "We have a dataset with "
+        f"{len(feature_cols)} features. "
+        f"About {high_corr_pairs} of {int(total_pairs)} feature pairs "
+        f"have correlation above 0.85 (ratio {high_corr_ratio:.2f}). "
+        "Should we apply PCA for dimensionality reduction? "
+        "Respond in JSON with keys 'apply_pca' (yes/no) and 'reason'."
+    )
+
+    llm_raw = _query_llm(prompt)
+    apply_pca = None
+    reason = ""
+    if llm_raw:
+        try:
+            parsed = json.loads(llm_raw)
+            decision = str(parsed.get("apply_pca", "")).lower()
+            apply_pca = decision.startswith("y")
+            reason = parsed.get("reason", "")
+        except Exception:
+            apply_pca = None
+
+    if apply_pca is None:
+        # fallback heuristic
+        apply_pca = len(feature_cols) > 20 or high_corr_ratio > 0.3
+        reason = (
+            "heuristic: many features" if len(feature_cols) > 20 else "heuristic: high correlation"
+            if apply_pca
+            else "heuristic: dimensionality acceptable"
+        )
+
+    if not apply_pca:
+        state.append_log(f"FeatureReduction: skipped PCA - {reason}")
+        return state
+
+    pca = PCA(n_components=0.9)
+    try:
         components = pca.fit_transform(df[feature_cols])
-        comp_cols = [f"pc{i+1}" for i in range(components.shape[1])]
-        state.df = df[[state.target]].join(
-            pd.DataFrame(components, columns=comp_cols, index=df.index)
-        )
-        state.append_log(
-            f"FeatureReduction: applied PCA to {len(feature_cols)} features -> {len(comp_cols)} components"
-        )
+    except Exception as e:
+        state.append_log(f"FeatureReduction: PCA failed ({e})")
+        return state
+
+    comp_cols = [f"pc{i+1}" for i in range(components.shape[1])]
+    state.df = df[[state.target]].join(
+        pd.DataFrame(components, columns=comp_cols, index=df.index)
+    )
+    state.append_log(
+        "FeatureReduction: "
+        + reason
+        + f" Applied PCA -> {len(comp_cols)} components"
+    )
     return state
