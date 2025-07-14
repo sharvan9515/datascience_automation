@@ -1,13 +1,18 @@
+"""Command-line entry point for the agentic data science pipeline."""
+
+import argparse
 import pandas as pd
+
 from automation.pipeline_state import PipelineState
 from automation.agents import orchestrator
 
 
-def run_pipeline(csv_path: str, target: str):
+def run_pipeline(csv_path: str, target: str) -> PipelineState:
+    """Load data, initialize :class:`PipelineState`, and run the orchestrator."""
+
     df = pd.read_csv(csv_path)
     state = PipelineState(df=df, target=target)
-    state = orchestrator.run(state)
-    return state
+    return orchestrator.run(state)
 
 
 def compile_log(state: PipelineState) -> str:
@@ -20,11 +25,18 @@ def print_final_log(state: PipelineState) -> None:
     print(compile_log(state))
 
 
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="Run data science automation pipeline")
+def main(args: list[str] | None = None) -> None:
+    """Parse CLI arguments, run the pipeline, and print the log."""
+
+    parser = argparse.ArgumentParser(
+        description="Run data science automation pipeline"
+    )
     parser.add_argument("csv", help="Path to CSV file")
     parser.add_argument("target", help="Target column name")
-    args = parser.parse_args()
-    final_state = run_pipeline(args.csv, args.target)
+    parsed = parser.parse_args(args)
+    final_state = run_pipeline(parsed.csv, parsed.target)
     print_final_log(final_state)
+
+
+if __name__ == "__main__":
+    main()
