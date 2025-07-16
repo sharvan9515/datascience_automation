@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+
 from automation.pipeline_state import PipelineState
 
+# Execution order for collected code blocks. Only stages that generate
+# executable snippets are included here.
 ORDER = [
     "preprocessing",
     "feature_implementation",
@@ -12,9 +15,11 @@ ORDER = [
     "model_training",
 ]
 
+__all__ = ["run"]
+
 
 def run(state: PipelineState) -> PipelineState:
-    """Assemble final pipeline code and save logs/history."""
+    """Assemble the generated code blocks and persist pipeline artifacts."""
     os.makedirs("output", exist_ok=True)
     os.makedirs("artifacts", exist_ok=True)
 
@@ -42,6 +47,7 @@ def run(state: PipelineState) -> PipelineState:
         json.dump(state.iteration_history, f, indent=2)
 
     report_lines = [
+        f"Iterations run: {state.iteration}",
         f"Best score: {state.best_score}",
         f"Features: {state.features}",
     ]
