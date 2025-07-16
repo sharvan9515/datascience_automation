@@ -14,16 +14,16 @@ from sklearn.metrics import (
 from sklearn.linear_model import LogisticRegression, LinearRegression
 
 
-def _query_llm(prompt: str) -> str | None:
-    """Return raw LLM response or ``None`` if the call fails."""
+def _query_llm(prompt: str) -> str:
+    """Return raw LLM response or raise ``RuntimeError`` on failure."""
 
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return None
+        raise RuntimeError("OPENAI_API_KEY environment variable is required")
     try:
         import openai
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError("openai package is required") from exc
 
     client = openai.OpenAI(api_key=api_key)
     try:
@@ -33,8 +33,8 @@ def _query_llm(prompt: str) -> str | None:
             temperature=0.0,
         )
         return resp.choices[0].message.content.strip()
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"LLM call failed: {exc}") from exc
 
 
 def _evaluate(df, target: str, task_type: str) -> dict[str, float]:
@@ -113,16 +113,9 @@ def run(state: PipelineState) -> PipelineState:
             )
 
         llm_decision = _query_llm(prompt)
-        keep = None
-        if llm_decision:
-            keep = llm_decision.strip().lower().startswith("y")
-
-        if keep is None:
-            # simple heuristic fallback
-            if state.task_type == "classification":
-                keep = delta_f1 > 0 or delta_acc > 0
-            else:
-                keep = delta_r2 > 0 or delta_rmse < 0
+        if not llm_decision:
+            raise RuntimeError("LLM failed to return feature selection decision")
+        keep = llm_decision.strip().lower().startswith("y")
 
         if keep:
             kept_features.append(feat)

@@ -9,16 +9,16 @@ import pandas as pd
 from automation.pipeline_state import PipelineState
 
 
-def _query_llm(prompt: str) -> str | None:
-    """Return raw LLM response or ``None`` if the call fails."""
+def _query_llm(prompt: str) -> str:
+    """Return raw LLM response or raise ``RuntimeError`` on failure."""
 
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return None
+        raise RuntimeError("OPENAI_API_KEY environment variable is required")
     try:
         import openai
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError("openai package is required") from exc
 
     client = openai.OpenAI(api_key=api_key)
     try:
@@ -28,8 +28,8 @@ def _query_llm(prompt: str) -> str | None:
             temperature=0.0,
         )
         return resp.choices[0].message.content.strip()
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"LLM call failed: {exc}") from exc
 
 
 def run(state: PipelineState) -> PipelineState:
@@ -52,29 +52,13 @@ def run(state: PipelineState) -> PipelineState:
     )
 
     llm_resp = _query_llm(base_prompt)
-    parsed: dict[str, object] | None = None
-    if llm_resp:
-        try:
-            parsed = json.loads(llm_resp)
-        except json.JSONDecodeError:
-            parsed = None
+    try:
+        parsed: dict[str, object] = json.loads(llm_resp)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Failed to parse LLM response: {exc}") from exc
 
-    # Simple fallback for _over_ style features if LLM is unavailable
-    if not parsed or "code" not in parsed:
-        fallback_lines = []
-        for feat in state.features:
-            if "_over_" in feat:
-                num1, num2 = feat.split("_over_")
-                if num1 in df.columns and num2 in df.columns:
-                    df[feat] = df[num1] / (df[num2] + 1e-6)
-                    fallback_lines.append(
-                        f"df['{feat}'] = df['{num1}'] / (df['{num2}'] + 1e-6)"
-                    )
-                    state.append_log(f"FeatureImplementation fallback: created {feat}")
-        state.df = df
-        if fallback_lines:
-            state.append_code(stage_name, "\n".join(fallback_lines))
-        return state
+    if "code" not in parsed:
+        raise RuntimeError("LLM response missing 'code'")
 
     code = parsed.get("code", "")
     logs = parsed.get("logs", [])
@@ -107,26 +91,11 @@ def run(state: PipelineState) -> PipelineState:
             logs = parsed.get("logs", [])
             state.append_log("FeatureImplementation: retrying after error")
 
-    if success:
-        for msg in logs or []:
-            state.append_log(f"FeatureImplementation: {msg}")
-        state.append_code(stage_name, code)
-        state.df = df
-        return state
+    if not success:
+        raise RuntimeError("LLM-provided feature implementation code failed")
 
-    # Final fallback if retries failed
-    fallback_lines = []
-    for feat in state.features:
-        if "_over_" in feat and feat not in df.columns:
-            num1, num2 = feat.split("_over_")
-            if num1 in df.columns and num2 in df.columns:
-                df[feat] = df[num1] / (df[num2] + 1e-6)
-                state.append_log(f"FeatureImplementation fallback: created {feat}")
-                fallback_lines.append(
-                    f"df['{feat}'] = df['{num1}'] / (df['{num2}'] + 1e-6)"
-                )
-
+    for msg in logs or []:
+        state.append_log(f"FeatureImplementation: {msg}")
+    state.append_code(stage_name, code)
     state.df = df
-    if fallback_lines:
-        state.append_code(stage_name, "\n".join(fallback_lines))
     return state

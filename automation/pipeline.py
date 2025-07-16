@@ -2,6 +2,7 @@
 
 import argparse
 import pandas as pd
+import os
 
 from automation.pipeline_state import PipelineState
 from automation.agents import orchestrator
@@ -9,6 +10,9 @@ from automation.agents import orchestrator
 
 def run_pipeline(csv_path: str, target: str) -> PipelineState:
     """Load data, initialize :class:`PipelineState`, and run the orchestrator."""
+
+    if not os.getenv("OPENAI_API_KEY"):
+        raise RuntimeError("OPENAI_API_KEY environment variable is required")
 
     df = pd.read_csv(csv_path)
     state = PipelineState(df=df, target=target)

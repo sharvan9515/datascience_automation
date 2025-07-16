@@ -14,16 +14,16 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.svm import SVC, SVR
 
 
-def _query_llm(prompt: str) -> str | None:
-    """Return raw LLM response or ``None`` if the call fails."""
+def _query_llm(prompt: str) -> str:
+    """Return raw LLM response or raise ``RuntimeError`` on failure."""
 
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return None
+        raise RuntimeError("OPENAI_API_KEY environment variable is required")
     try:
         import openai
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError("openai package is required") from exc
 
     client = openai.OpenAI(api_key=api_key)
     try:
@@ -33,8 +33,8 @@ def _query_llm(prompt: str) -> str | None:
             temperature=0.0,
         )
         return resp.choices[0].message.content.strip()
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"LLM call failed: {exc}") from exc
 
 
 MODEL_MAP = {
@@ -70,28 +70,22 @@ def run(state: PipelineState) -> PipelineState:
     )
 
     llm_raw = _query_llm(prompt)
-    model_cls = None
-    params: dict[str, object] = {}
-    if llm_raw:
-        try:
-            parsed = json.loads(llm_raw)
-            model_name = _normalize(str(parsed.get("model", "")))
-            params = parsed.get("params", {}) or {}
-            model_cls = MODEL_MAP.get(model_name)
-        except Exception:
-            model_cls = None
+    try:
+        parsed = json.loads(llm_raw)
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"Failed to parse LLM response: {exc}") from exc
 
+    model_name = _normalize(str(parsed.get("model")))
+    if not model_name:
+        raise RuntimeError("LLM response missing model name")
+    params = parsed.get("params", {}) or {}
+    model_cls = MODEL_MAP.get(model_name)
     if model_cls is None:
-        # fallback based on task type
-        model_cls = LogisticRegression if state.task_type == "classification" else LinearRegression
-        params = {}
-        state.append_log(
-            f"ModelTraining: LLM unavailable, using fallback {model_cls.__name__}"
-        )
-    else:
-        state.append_log(
-            f"ModelTraining: selected {model_cls.__name__} with params {params}"
-        )
+        raise RuntimeError(f"Unsupported model suggested by LLM: {model_name}")
+
+    state.append_log(
+        f"ModelTraining: selected {model_cls.__name__} with params {params}"
+    )
 
     model = model_cls(**params)
     model.fit(X_train, y_train)
