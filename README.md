@@ -1,10 +1,11 @@
 # Data Science Automation
 
-This project implements a simplified version of the agent-based pipeline described in
-`AGENTS.md`.  Each agent is a small Python module that operates on a shared
-`PipelineState` object and the orchestrator chains them together.  The system can
-consult an OpenAI model when an API key is supplied, but it also works purely with
-the built‑in heuristics.
+This project implements a simplified version of the agent-based pipeline
+described in `AGENTS.md`. Each step of the data science workflow is handled by a
+dedicated agent which operates on a shared `PipelineState` object. The
+orchestrator glues these agents together and optionally consults an OpenAI model
+for richer suggestions. If no API key is provided, the agents fall back to the
+built‑in heuristics.
 
 ## Quickstart
 
@@ -15,7 +16,8 @@ the built‑in heuristics.
    ```
 
 2. **Create or supply a CSV dataset.**  Any tabular data with a target column will
-   work.  The snippet below exports the classic Iris dataset:
+   work.  The snippet below exports the classic Iris dataset as an example. Make
+   sure the dataset includes the column you plan to predict:
 
    ```bash
    python - <<'EOF'
@@ -27,15 +29,23 @@ the built‑in heuristics.
    EOF
    ```
 
-3. **Run the pipeline** on the CSV file, specifying the name of the target column:
+   For your own data, replace `iris.csv` with the path to your dataset.
+
+3. **Run the pipeline** on the CSV file, passing the path and the target column
+   name:
 
    ```bash
    python -m automation.pipeline iris.csv target
    ```
 
-   If you set the environment variable `OPENAI_API_KEY`, the agents will query the
-   API for more detailed suggestions.  Without it, they fall back to deterministic
-   behaviour.
+   The script produces a detailed log of each agent step. If the environment
+   variable `OPENAI_API_KEY` is set, the orchestrator consults the OpenAI API for
+   smarter decisions; otherwise deterministic heuristics are used.
+
+   After completion you will find:
+   
+   - `pipeline.py` – assembled code for the final pipeline
+   - `output/` – directory containing logs, iteration history and a short report
 
 The script prints log entries from every agent step.  Example output:
 
