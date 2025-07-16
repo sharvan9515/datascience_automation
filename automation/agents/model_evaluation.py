@@ -5,16 +5,20 @@ from __future__ import annotations
 import json
 import os
 from automation.pipeline_state import PipelineState
+import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
     confusion_matrix,
+    f1_score,
     mean_absolute_error,
     mean_squared_error,
     r2_score,
 )
 from sklearn.linear_model import LogisticRegression, LinearRegression
+
+__all__ = ["compute_score", "run"]
 
 
 def _query_llm(prompt: str) -> str:
@@ -40,7 +44,7 @@ def _query_llm(prompt: str) -> str:
         raise RuntimeError(f"LLM call failed: {exc}") from exc
 
 
-def compute_score(df, target: str, task_type: str) -> float:
+def compute_score(df: pd.DataFrame, target: str, task_type: str) -> float:
     """Return a simple train/test score for the given dataset."""
 
     X = df.drop(columns=[target])
@@ -52,7 +56,7 @@ def compute_score(df, target: str, task_type: str) -> float:
         model = LogisticRegression(max_iter=200)
         model.fit(X_train, y_train)
         preds = model.predict(X_test)
-        return accuracy_score(y_test, preds)
+        return f1_score(y_test, preds, average="weighted")
 
     model = LinearRegression()
     model.fit(X_train, y_train)
