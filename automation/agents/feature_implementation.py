@@ -36,6 +36,7 @@ def run(state: PipelineState) -> PipelineState:
     """Generate pandas code for each feature and execute it safely."""
 
     df = state.df.copy()
+    stage_name = "feature_implementation"
 
     if not state.features:
         # Nothing to implement
@@ -60,13 +61,19 @@ def run(state: PipelineState) -> PipelineState:
 
     # Simple fallback for _over_ style features if LLM is unavailable
     if not parsed or "code" not in parsed:
+        fallback_lines = []
         for feat in state.features:
             if "_over_" in feat:
                 num1, num2 = feat.split("_over_")
                 if num1 in df.columns and num2 in df.columns:
                     df[feat] = df[num1] / (df[num2] + 1e-6)
+                    fallback_lines.append(
+                        f"df['{feat}'] = df['{num1}'] / (df['{num2}'] + 1e-6)"
+                    )
                     state.append_log(f"FeatureImplementation fallback: created {feat}")
         state.df = df
+        if fallback_lines:
+            state.append_code(stage_name, "\n".join(fallback_lines))
         return state
 
     code = parsed.get("code", "")
@@ -103,16 +110,23 @@ def run(state: PipelineState) -> PipelineState:
     if success:
         for msg in logs or []:
             state.append_log(f"FeatureImplementation: {msg}")
+        state.append_code(stage_name, code)
         state.df = df
         return state
 
     # Final fallback if retries failed
+    fallback_lines = []
     for feat in state.features:
         if "_over_" in feat and feat not in df.columns:
             num1, num2 = feat.split("_over_")
             if num1 in df.columns and num2 in df.columns:
                 df[feat] = df[num1] / (df[num2] + 1e-6)
                 state.append_log(f"FeatureImplementation fallback: created {feat}")
+                fallback_lines.append(
+                    f"df['{feat}'] = df['{num1}'] / (df['{num2}'] + 1e-6)"
+                )
 
     state.df = df
+    if fallback_lines:
+        state.append_code(stage_name, "\n".join(fallback_lines))
     return state

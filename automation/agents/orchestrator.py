@@ -18,6 +18,7 @@ from . import (
     model_training,
     model_evaluation,
 )
+from .. import code_assembler
 
 
 STEP_AGENTS = {
@@ -111,12 +112,18 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
 def run(state: PipelineState, max_iter: int = 3) -> PipelineState:
     """Run the pipeline with LLM-guided orchestration and iteration."""
 
+    state.best_score = None
+    state.no_improve_rounds = 0
+    state.max_iter = max_iter
+
     state = task_identification.run(state)
-    iteration = 0
+    state.iteration = 0
     state = _run_decided_steps(state)
 
-    while state.iterate and iteration < max_iter:
-        iteration += 1
-        state.append_log(f"Orchestrator: starting iteration {iteration}")
+    while state.iterate and state.iteration < max_iter:
+        state.iteration += 1
+        state.append_log(f"Orchestrator: starting iteration {state.iteration}")
         state = _run_decided_steps(state)
+
+    state = code_assembler.run(state)
     return state

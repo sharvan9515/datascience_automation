@@ -65,6 +65,7 @@ def run(state: PipelineState) -> PipelineState:
     """Evaluate new features incrementally and keep only beneficial ones."""
 
     df = state.df.copy()
+    stage_name = "feature_selection"
     new_feats = [f for f in state.features if f in df.columns]
 
     # Baseline without proposed features
@@ -148,5 +149,8 @@ def run(state: PipelineState) -> PipelineState:
     # Update dataframe and feature list
     state.df = current_df
     state.features = kept_features
+
+    code_snippet = f"df = df[['{state.target}'] + {kept_features!r}]"
+    state.append_code(stage_name, code_snippet)
 
     return state
