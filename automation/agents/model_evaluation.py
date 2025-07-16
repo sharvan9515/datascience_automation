@@ -109,11 +109,9 @@ def run(state: PipelineState) -> PipelineState:
     else:
         state.no_improve_rounds += 1
 
-    improvement = 0 if prev_best is None else new_score - prev_best
     state.iterate = not (
-        state.no_improve_rounds >= 2
+        state.no_improve_rounds >= 5
         or state.iteration >= state.max_iter
-        or improvement < tol
     )
 
     log_msg = f"ModelEvaluation decision: iterate={state.iterate} - {reason}".strip()
