@@ -6,6 +6,9 @@ import json
 import os
 from typing import Dict
 
+import pandas as pd
+from sklearn.decomposition import PCA
+
 from automation.pipeline_state import PipelineState
 from . import (
     task_identification,
@@ -19,6 +22,12 @@ from . import (
     model_evaluation,
 )
 from .. import code_assembler
+
+
+def _compute_score(df: pd.DataFrame, target: str, task_type: str) -> float:
+    """Wrapper around :func:`model_evaluation.compute_score`."""
+
+    return model_evaluation.compute_score(df, target, task_type)
 
 
 STEP_AGENTS = {
@@ -93,16 +102,50 @@ def _decide_steps(state: PipelineState) -> Dict[str, Dict[str, object]]:
 def _run_decided_steps(state: PipelineState) -> PipelineState:
     """Run a round of agents based on LLM decisions."""
 
+    if state.current_score is None:
+        state.current_score = _compute_score(state.df, state.target, state.task_type)
+
     decisions = _decide_steps(state)
-    for step, agent in STEP_AGENTS.items():
-        decision = decisions.get(step, {"run": True, "reason": ""})
+
+    for stage, agent in STEP_AGENTS.items():
+        decision = decisions.get(stage, {"run": True, "reason": ""})
         run_step = bool(decision.get("run"))
         reason = str(decision.get("reason", ""))
-        state.append_log(f"Orchestrator decision: {step}={run_step} - {reason}")
-        if run_step:
-            state = agent.run(state)
+        state.append_log(f"Orchestrator decision: {stage}={run_step} - {reason}")
+        if not run_step:
+            continue
+
+        state = agent.run(state)
+
+        for snippet in list(state.pending_code.get(stage, [])):
+            trial_df = state.df.copy()
+            env = {"pd": pd, "PCA": PCA}
+            local_vars = {"df": trial_df, "target": state.target}
+            try:
+                exec(snippet, env, local_vars)
+            except Exception as exc:  # noqa: BLE001
+                state.append_log(f"{stage} snippet failed: {exc}")
+                continue
+
+            trial_df = local_vars.get("df", trial_df)
+            trial_score = _compute_score(trial_df, state.target, state.task_type)
+
+            if trial_score > (state.current_score or 0.0):
+                delta = trial_score - (state.current_score or 0.0)
+                state.append_log(f"{stage}: accepted snippet (+{delta:.4f} score)")
+                state.df = trial_df
+                state.current_score = trial_score
+                state.append_code(stage, snippet)
+            else:
+                state.append_log(
+                    f"{stage}: rejected snippet ({trial_score:.4f} <= {state.current_score:.4f})"
+                )
+
+        state.pending_code[stage] = []
+
     state = model_training.run(state)
     state = model_evaluation.run(state)
+    state.current_score = _compute_score(state.df, state.target, state.task_type)
     return state
 
 
