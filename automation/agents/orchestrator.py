@@ -106,7 +106,7 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
     return state
 
 
-def run(state: PipelineState, max_iter: int = 3) -> PipelineState:
+def run(state: PipelineState, max_iter: int = 10) -> PipelineState:
     """Run the pipeline with LLM-guided orchestration and iteration."""
 
     state.best_score = None
@@ -115,12 +115,12 @@ def run(state: PipelineState, max_iter: int = 3) -> PipelineState:
 
     state = task_identification.run(state)
     state.iteration = 0
-    state = _run_decided_steps(state)
+    state.iterate = True
 
     while state.iterate and state.iteration < max_iter:
-        state.iteration += 1
         state.append_log(f"Orchestrator: starting iteration {state.iteration}")
         state = _run_decided_steps(state)
+        state.iteration += 1
 
     state = code_assembler.run(state)
     return state
