@@ -8,7 +8,7 @@ from automation.pipeline_state import PipelineState
 from automation.agents import orchestrator
 
 
-def run_pipeline(csv_path: str, target: str) -> PipelineState:
+def run_pipeline(csv_path: str, target: str, max_iter: int = 10, patience: int = 5) -> PipelineState:
     """Load data, initialize :class:`PipelineState`, and run the orchestrator."""
 
     if not os.getenv("OPENAI_API_KEY"):
@@ -16,7 +16,7 @@ def run_pipeline(csv_path: str, target: str) -> PipelineState:
 
     df = pd.read_csv(csv_path)
     state = PipelineState(df=df, target=target)
-    return orchestrator.run(state)
+    return orchestrator.run(state, max_iter=max_iter, patience=patience)
 
 
 def compile_log(state: PipelineState) -> str:
@@ -37,8 +37,10 @@ def main(args: list[str] | None = None) -> None:
     )
     parser.add_argument("csv", help="Path to CSV file")
     parser.add_argument("target", help="Target column name")
+    parser.add_argument("--max-iter", type=int, default=10, help="Maximum iterations")
+    parser.add_argument("--patience", type=int, default=5, help="Rounds without improvement before stopping")
     parsed = parser.parse_args(args)
-    final_state = run_pipeline(parsed.csv, parsed.target)
+    final_state = run_pipeline(parsed.csv, parsed.target, max_iter=parsed.max_iter, patience=parsed.patience)
     print_final_log(final_state)
 
 

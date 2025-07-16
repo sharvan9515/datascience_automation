@@ -117,7 +117,7 @@ def run(state: PipelineState) -> PipelineState:
         state.no_improve_rounds += 1
 
     state.iterate = not (
-        state.no_improve_rounds >= 5
+        state.no_improve_rounds >= state.patience
         or state.iteration >= state.max_iter
     )
 
