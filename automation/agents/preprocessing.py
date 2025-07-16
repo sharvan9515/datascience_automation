@@ -27,7 +27,7 @@ def _query_llm(prompt: str) -> str:
 
 
 def run(state: PipelineState) -> PipelineState:
-    """Use an LLM to determine preprocessing steps and apply them safely."""
+    """Query the LLM for preprocessing code and store it for later execution."""
     df = state.df.copy()
     stage_name = "preprocessing"
 
@@ -55,36 +55,9 @@ def run(state: PipelineState) -> PipelineState:
     code = parsed.get('code', '')
     logs = parsed.get('logs', [])
 
-    success = False
-    for attempt in range(2):
-        local_env = {'df': df, 'pd': pd}
-        try:
-            exec(code, {}, local_env)
-            df = local_env['df']
-            success = True
-            break
-        except Exception as e:
-            error_prompt = (
-                base_prompt
-                + f" The previous code failed with: {e}. Please return corrected JSON."
-            )
-            llm_resp = _query_llm(error_prompt)
-            try:
-                parsed = json.loads(llm_resp)
-            except json.JSONDecodeError:
-                raise RuntimeError("Failed to parse corrected LLM response")
-            if 'code' not in parsed:
-                raise RuntimeError("Corrected LLM response missing 'code'")
-            code = parsed.get('code', '')
-            logs = parsed.get('logs', [])
-
-    if not success:
-        raise RuntimeError("LLM-provided preprocessing code failed")
-
     for msg in logs:
         state.append_log(f"Preprocessing: {msg}")
     if rationale := parsed.get('rationale'):
         state.append_log(f"Preprocessing rationale: {rationale}")
-    state.append_code(stage_name, code)
-    state.df = df
+    state.append_pending_code(stage_name, code)
     return state
