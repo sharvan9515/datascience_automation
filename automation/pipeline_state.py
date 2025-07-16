@@ -10,7 +10,9 @@ class PipelineState:
     iterate: bool = False
     log: List[str] = field(default_factory=list)
     features: List[str] = field(default_factory=list)
+    pending_code: dict[str, list[str]] = field(default_factory=dict)
     code_blocks: dict[str, list[str]] = field(default_factory=dict)
+    current_score: float | None = None
     iteration_history: list[dict] = field(default_factory=list)
     best_score: Optional[float] = None
     no_improve_rounds: int = 0
@@ -24,3 +26,7 @@ class PipelineState:
     def append_code(self, stage: str, code: str) -> None:
         """Store code snippets for later assembly."""
         self.code_blocks.setdefault(stage, []).append(code)
+
+    def append_pending_code(self, stage: str, code: str) -> None:
+        """Store code snippets awaiting validation or execution."""
+        self.pending_code.setdefault(stage, []).append(code)

@@ -113,6 +113,11 @@ def run(state: PipelineState, max_iter: int = 10) -> PipelineState:
     state.no_improve_rounds = 0
     state.max_iter = max_iter
 
+    # Initialize code tracking structures for each step
+    for step in STEP_AGENTS:
+        state.pending_code.setdefault(step, [])
+        state.code_blocks.setdefault(step, [])
+
     state = task_identification.run(state)
     state.iteration = 0
     state.iterate = True
