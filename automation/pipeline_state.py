@@ -10,8 +10,8 @@ class PipelineState:
     iterate: bool = False
     log: List[str] = field(default_factory=list)
     features: List[str] = field(default_factory=list)
-    code_blocks: dict[str, List[str]] = field(default_factory=dict)
-    iteration_history: List[dict] = field(default_factory=list)
+    code_blocks: dict[str, list[str]] = field(default_factory=dict)
+    iteration_history: list[dict] = field(default_factory=list)
     best_score: Optional[float] = None
     no_improve_rounds: int = 0
     iteration: int = 0
