@@ -94,34 +94,32 @@ def run(state: PipelineState) -> PipelineState:
     except Exception as exc:  # noqa: BLE001
         raise RuntimeError(f"Failed to parse LLM response: {exc}") from exc
 
-    if not isinstance(parsed, dict) or "iterate" not in parsed:
-        raise RuntimeError("LLM response missing 'iterate'")
+    if not isinstance(parsed, dict):
+        raise RuntimeError("LLM response must be a JSON object")
 
-    iterate = str(parsed.get("iterate", "")).lower().startswith("y")
     reason = parsed.get("reason", "")
     suggestions = parsed.get("suggestions", "")
 
-    state.iterate = bool(iterate)
-    log_msg = f"ModelEvaluation decision: iterate={state.iterate} - {reason}".strip()
-    state.append_log(log_msg)
-    if suggestions:
-        state.append_log(f"ModelEvaluation suggestions: {suggestions}")
-
     prev_best = state.best_score
     tol = 0.01
-    if prev_best is None or new_score > prev_best + tol:
+    improved = prev_best is None or new_score > prev_best + tol
+    if improved:
         state.best_score = new_score
         state.no_improve_rounds = 0
     else:
         state.no_improve_rounds += 1
 
     improvement = 0 if prev_best is None else new_score - prev_best
-    if (
+    state.iterate = not (
         state.no_improve_rounds >= 2
         or state.iteration >= state.max_iter
         or improvement < tol
-    ):
-        state.iterate = False
+    )
+
+    log_msg = f"ModelEvaluation decision: iterate={state.iterate} - {reason}".strip()
+    state.append_log(log_msg)
+    if suggestions:
+        state.append_log(f"ModelEvaluation suggestions: {suggestions}")
 
     state.iteration_history.append(
         {
