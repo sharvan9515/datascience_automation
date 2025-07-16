@@ -62,7 +62,8 @@ def _decide_steps(state: PipelineState) -> Dict[str, Dict[str, object]]:
     prompt = (
         "You orchestrate an automated ML pipeline. "
         "Decide whether to run these steps next: preprocessing, correlation_eda, "
-        "feature_ideation, feature_selection, feature_reduction. "
+        "feature_ideation, feature_implementation, feature_selection, "
+        "feature_reduction. "
         "Return JSON where each key maps to an object with 'run' (yes/no) and "
         "'reason'.\n"
         f"Rows: {len(df)}\nSchema: {json.dumps(schema)}\n"
