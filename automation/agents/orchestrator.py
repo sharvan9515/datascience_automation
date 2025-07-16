@@ -102,6 +102,8 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
     if state.current_score is None:
         state.current_score = _compute_score(state.df, state.target, state.task_type)
 
+    prev_best_score = state.best_score if state.best_score is not None else state.current_score
+
     decisions = _decide_steps(state)
 
     for stage, agent in STEP_AGENTS.items():
@@ -122,6 +124,15 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
                 exec(snippet, env, local_vars)
             except Exception as exc:  # noqa: BLE001
                 state.append_log(f"{stage} snippet failed: {exc}")
+                state.snippet_history.append(
+                    {
+                        "iteration": state.iteration,
+                        "stage": stage,
+                        "snippet": snippet,
+                        "accepted": False,
+                        "score": None,
+                    }
+                )
                 continue
 
             trial_df = local_vars.get("df", trial_df)
@@ -133,9 +144,27 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
                 state.df = trial_df
                 state.current_score = trial_score
                 state.append_code(stage, snippet)
+                state.snippet_history.append(
+                    {
+                        "iteration": state.iteration,
+                        "stage": stage,
+                        "snippet": snippet,
+                        "accepted": True,
+                        "score": trial_score,
+                    }
+                )
             else:
                 state.append_log(
                     f"{stage}: rejected snippet ({trial_score:.4f} <= {state.current_score:.4f})"
+                )
+                state.snippet_history.append(
+                    {
+                        "iteration": state.iteration,
+                        "stage": stage,
+                        "snippet": snippet,
+                        "accepted": False,
+                        "score": trial_score,
+                    }
                 )
 
         state.pending_code[stage] = []
@@ -143,15 +172,39 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
     state = model_training.run(state)
     state = model_evaluation.run(state)
     state.current_score = _compute_score(state.df, state.target, state.task_type)
+
+    if state.best_score is not None and state.best_score > prev_best_score:
+        state.best_df = state.df.copy()
+        state.best_code_blocks = {k: v.copy() for k, v in state.code_blocks.items()}
+        state.best_features = list(state.features)
+    elif state.best_score == prev_best_score and state.best_df is not None:
+        state.append_log("No improvement this iteration; reverting to last best state.")
+        state.df = state.best_df.copy()
+        state.code_blocks = {k: v.copy() for k, v in state.best_code_blocks.items()}
+        state.features = list(state.best_features)
+        state.current_score = prev_best_score
+
     return state
 
 
-def run(state: PipelineState, max_iter: int = 10) -> PipelineState:
-    """Run the pipeline with LLM-guided orchestration and iteration."""
+def run(state: PipelineState, max_iter: int = 10, patience: int = 5) -> PipelineState:
+    """Run the pipeline with LLM-guided orchestration and iteration.
+
+    Parameters
+    ----------
+    max_iter : int
+        Maximum number of iterations to perform.
+    patience : int
+        Stop after this many iterations without improvement.
+    """
 
     state.best_score = None
     state.no_improve_rounds = 0
     state.max_iter = max_iter
+    state.patience = patience
+    state.best_df = state.df.copy()
+    state.best_code_blocks = {k: v.copy() for k, v in state.code_blocks.items()}
+    state.best_features = list(state.features)
 
     # Initialize code tracking structures for each step
     for step in STEP_AGENTS:

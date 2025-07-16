@@ -32,10 +32,11 @@ built‑in heuristics.
    For your own data, replace `iris.csv` with the path to your dataset.
 
 3. **Run the pipeline** on the CSV file, passing the path and the target column
-   name:
+   name. Optional flags `--max-iter` and `--patience` control the number of
+   iterations and how many non-improving rounds to tolerate:
 
    ```bash
-   python -m automation.pipeline iris.csv target
+   python -m automation.pipeline iris.csv target --max-iter 15 --patience 3
    ```
 
    The script produces a detailed log of each agent step. If the environment

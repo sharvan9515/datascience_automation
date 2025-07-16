@@ -14,7 +14,12 @@ class PipelineState:
     code_blocks: dict[str, list[str]] = field(default_factory=dict)
     current_score: float | None = None
     iteration_history: list[dict] = field(default_factory=list)
+    snippet_history: list[dict] = field(default_factory=list)
     best_score: Optional[float] = None
+    best_df: Optional[pd.DataFrame] = None
+    best_code_blocks: dict[str, list[str]] = field(default_factory=dict)
+    best_features: List[str] = field(default_factory=list)
+    patience: int = 5
     no_improve_rounds: int = 0
     iteration: int = 0
     max_iter: int = 0
