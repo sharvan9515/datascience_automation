@@ -29,6 +29,7 @@ def _query_llm(prompt: str) -> str | None:
 def run(state: PipelineState) -> PipelineState:
     """Use an LLM to determine preprocessing steps and apply them safely."""
     df = state.df.copy()
+    stage_name = "preprocessing"
 
     schema = {col: str(df[col].dtype) for col in df.columns}
     missing = df.isnull().sum().to_dict()
@@ -52,6 +53,7 @@ def run(state: PipelineState) -> PipelineState:
 
     if not parsed or 'code' not in parsed:
         # fallback to simple mean/mode imputation
+        fallback_lines = []
         for col in df.columns:
             if df[col].isnull().any():
                 if df[col].dtype == 'O':
@@ -59,10 +61,15 @@ def run(state: PipelineState) -> PipelineState:
                 else:
                     fill_value = df[col].mean()
                 df[col] = df[col].fillna(fill_value)
+                fallback_lines.append(
+                    f"df['{col}'] = df['{col}'].fillna({repr(fill_value)})"
+                )
                 state.append_log(
                     f"Preprocessing fallback: filled missing values in {col} with {fill_value}"
                 )
         state.df = df
+        if fallback_lines:
+            state.append_code(stage_name, "\n".join(fallback_lines))
         return state
 
     code = parsed.get('code', '')
@@ -98,10 +105,12 @@ def run(state: PipelineState) -> PipelineState:
             state.append_log(f"Preprocessing: {msg}")
         if rationale := parsed.get('rationale'):
             state.append_log(f"Preprocessing rationale: {rationale}")
+        state.append_code(stage_name, code)
         state.df = df
         return state
 
     # final fallback if LLM execution failed
+    fallback_lines = []
     for col in df.columns:
         if df[col].isnull().any():
             if df[col].dtype == 'O':
@@ -112,5 +121,10 @@ def run(state: PipelineState) -> PipelineState:
             state.append_log(
                 f"Preprocessing fallback: filled missing values in {col} with {fill_value}"
             )
+            fallback_lines.append(
+                f"df['{col}'] = df['{col}'].fillna({repr(fill_value)})"
+            )
     state.df = df
+    if fallback_lines:
+        state.append_code(stage_name, "\n".join(fallback_lines))
     return state

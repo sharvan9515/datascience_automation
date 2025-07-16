@@ -63,6 +63,7 @@ def run(state: PipelineState) -> PipelineState:
             f"accuracy={acc:.4f}\nconfusion_matrix={cm.tolist()}\n{report}"
         )
         state.append_log(f"ModelEvaluation metrics:\n{metrics_str}")
+        new_score = acc
     else:
         model = LinearRegression()
         model.fit(X_train, y_train)
@@ -76,6 +77,7 @@ def run(state: PipelineState) -> PipelineState:
             f"r2={r2:.4f}, mse={mse:.4f}, mae={mae:.4f}"
         )
         state.append_log(f"ModelEvaluation metrics: {metrics_str}")
+        new_score = r2
 
     # Ask the LLM for refinement suggestions
     prompt = (
@@ -117,5 +119,31 @@ def run(state: PipelineState) -> PipelineState:
     state.append_log(log_msg)
     if suggestions:
         state.append_log(f"ModelEvaluation suggestions: {suggestions}")
+
+    prev_best = state.best_score
+    tol = 0.01
+    if prev_best is None or new_score > prev_best + tol:
+        state.best_score = new_score
+        state.no_improve_rounds = 0
+    else:
+        state.no_improve_rounds += 1
+
+    improvement = 0 if prev_best is None else new_score - prev_best
+    if (
+        state.no_improve_rounds >= 2
+        or state.iteration >= state.max_iter
+        or improvement < tol
+    ):
+        state.iterate = False
+
+    state.iteration_history.append(
+        {
+            "iteration": state.iteration,
+            "metrics": metrics_str,
+            "best_score": state.best_score,
+            "no_improve_rounds": state.no_improve_rounds,
+            "iterate": state.iterate,
+        }
+    )
 
     return state

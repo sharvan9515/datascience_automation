@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import joblib
 
 from automation.pipeline_state import PipelineState
 from sklearn.model_selection import train_test_split
@@ -54,6 +55,7 @@ def run(state: PipelineState) -> PipelineState:
     """Train a model suggested by the LLM and log metrics."""
 
     df = state.df
+    stage_name = "model_training"
     X = df.drop(columns=[state.target])
     y = df[state.target]
     X_train, X_test, y_train, y_test = train_test_split(
@@ -104,5 +106,17 @@ def run(state: PipelineState) -> PipelineState:
         state.append_log(
             f"ModelTraining: {model_cls.__name__} r2={score:.4f}"
         )
+
+    os.makedirs("artifacts", exist_ok=True)
+    joblib.dump(model, "artifacts/model.pkl")
+    code_snippet = (
+        f"X = df.drop(columns=['{state.target}'])\n"
+        f"y = df['{state.target}']\n"
+        "X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)\n"
+        f"model = {model_cls.__name__}(**{params})\n"
+        "model.fit(X_train, y_train)\n"
+        "joblib.dump(model, 'artifacts/model.pkl')"
+    )
+    state.append_code(stage_name, code_snippet)
 
     return state

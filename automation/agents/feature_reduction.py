@@ -36,6 +36,7 @@ def run(state: PipelineState) -> PipelineState:
     """Consult an LLM on PCA usage and apply if recommended."""
 
     df = state.df
+    stage_name = "feature_reduction"
     feature_cols = [c for c in df.columns if c != state.target]
     if not feature_cols:
         return state
@@ -102,4 +103,11 @@ def run(state: PipelineState) -> PipelineState:
         + reason
         + f" Applied PCA -> {len(comp_cols)} components"
     )
+    code_snippet = (
+        "pca = PCA(n_components=0.9)\n"
+        f"components = pca.fit_transform(df[{feature_cols!r}])\n"
+        "comp_cols = [f'pc{i+1}' for i in range(components.shape[1])]\n"
+        "df = df[[target]].join(pd.DataFrame(components, columns=comp_cols, index=df.index))"
+    )
+    state.append_code(stage_name, code_snippet)
     return state
