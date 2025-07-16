@@ -3,15 +3,15 @@ import os
 from automation.pipeline_state import PipelineState
 
 
-def _query_llm(prompt: str) -> str | None:
-    """Return raw LLM response or None if call fails."""
+def _query_llm(prompt: str) -> str:
+    """Return raw LLM response or raise ``RuntimeError`` on failure."""
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return None
+        raise RuntimeError("OPENAI_API_KEY environment variable is required")
     try:
         import openai
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError("openai package is required") from exc
 
     client = openai.OpenAI(api_key=api_key)
     try:
@@ -21,8 +21,8 @@ def _query_llm(prompt: str) -> str | None:
             temperature=0.0,
         )
         return resp.choices[0].message.content.strip()
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"LLM call failed: {exc}") from exc
 
 
 def run(state: PipelineState) -> PipelineState:
@@ -43,30 +43,18 @@ def run(state: PipelineState) -> PipelineState:
     )
 
     llm_raw = _query_llm(prompt)
-    parsed = None
-    if llm_raw:
-        try:
-            parsed = json.loads(llm_raw)
-        except json.JSONDecodeError:
-            parsed = None
+    try:
+        parsed = json.loads(llm_raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Failed to parse LLM response: {exc}") from exc
 
-    if parsed and isinstance(parsed, dict) and parsed.get("task_type"):
-        state.task_type = parsed["task_type"].lower()
-        if issues := parsed.get("issues"):
-            state.append_log(f"TaskIdentification issues: {issues}")
-        state.append_log(
-            f"TaskIdentification: determined task_type={state.task_type} via LLM"
-        )
-        return state
+    if not isinstance(parsed, dict) or "task_type" not in parsed:
+        raise RuntimeError("LLM response missing required 'task_type'")
 
-    # Fallback heuristic if LLM response is missing or malformed
-    target_series = df[state.target]
-    if target_series.dtype == "O" or target_series.nunique() < 20:
-        fallback = "classification"
-    else:
-        fallback = "regression"
-    state.task_type = fallback
+    state.task_type = parsed["task_type"].lower()
+    if issues := parsed.get("issues"):
+        state.append_log(f"TaskIdentification issues: {issues}")
     state.append_log(
-        f"TaskIdentification: LLM unclear, used heuristic task_type={fallback}"
+        f"TaskIdentification: determined task_type={state.task_type} via LLM"
     )
     return state

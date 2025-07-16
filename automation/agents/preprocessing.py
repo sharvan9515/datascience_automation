@@ -4,15 +4,15 @@ import pandas as pd
 from automation.pipeline_state import PipelineState
 
 
-def _query_llm(prompt: str) -> str | None:
-    """Return raw LLM response or None if call fails."""
+def _query_llm(prompt: str) -> str:
+    """Return raw LLM response or raise ``RuntimeError`` on failure."""
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return None
+        raise RuntimeError("OPENAI_API_KEY environment variable is required")
     try:
         import openai
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError("openai package is required") from exc
 
     client = openai.OpenAI(api_key=api_key)
     try:
@@ -22,8 +22,8 @@ def _query_llm(prompt: str) -> str | None:
             temperature=0.0,
         )
         return resp.choices[0].message.content.strip()
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"LLM call failed: {exc}") from exc
 
 
 def run(state: PipelineState) -> PipelineState:
@@ -44,33 +44,13 @@ def run(state: PipelineState) -> PipelineState:
     )
 
     llm_resp = _query_llm(base_prompt)
-    parsed = None
-    if llm_resp:
-        try:
-            parsed = json.loads(llm_resp)
-        except json.JSONDecodeError:
-            parsed = None
+    try:
+        parsed = json.loads(llm_resp)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Failed to parse LLM response: {exc}") from exc
 
-    if not parsed or 'code' not in parsed:
-        # fallback to simple mean/mode imputation
-        fallback_lines = []
-        for col in df.columns:
-            if df[col].isnull().any():
-                if df[col].dtype == 'O':
-                    fill_value = df[col].mode().iloc[0]
-                else:
-                    fill_value = df[col].mean()
-                df[col] = df[col].fillna(fill_value)
-                fallback_lines.append(
-                    f"df['{col}'] = df['{col}'].fillna({repr(fill_value)})"
-                )
-                state.append_log(
-                    f"Preprocessing fallback: filled missing values in {col} with {fill_value}"
-                )
-        state.df = df
-        if fallback_lines:
-            state.append_code(stage_name, "\n".join(fallback_lines))
-        return state
+    if 'code' not in parsed:
+        raise RuntimeError("LLM response missing 'code' field")
 
     code = parsed.get('code', '')
     logs = parsed.get('logs', [])
@@ -89,42 +69,22 @@ def run(state: PipelineState) -> PipelineState:
                 + f" The previous code failed with: {e}. Please return corrected JSON."
             )
             llm_resp = _query_llm(error_prompt)
-            if not llm_resp:
-                break
             try:
                 parsed = json.loads(llm_resp)
             except json.JSONDecodeError:
-                parsed = None
-            if not parsed or 'code' not in parsed:
-                break
+                raise RuntimeError("Failed to parse corrected LLM response")
+            if 'code' not in parsed:
+                raise RuntimeError("Corrected LLM response missing 'code'")
             code = parsed.get('code', '')
             logs = parsed.get('logs', [])
 
-    if success:
-        for msg in logs:
-            state.append_log(f"Preprocessing: {msg}")
-        if rationale := parsed.get('rationale'):
-            state.append_log(f"Preprocessing rationale: {rationale}")
-        state.append_code(stage_name, code)
-        state.df = df
-        return state
+    if not success:
+        raise RuntimeError("LLM-provided preprocessing code failed")
 
-    # final fallback if LLM execution failed
-    fallback_lines = []
-    for col in df.columns:
-        if df[col].isnull().any():
-            if df[col].dtype == 'O':
-                fill_value = df[col].mode().iloc[0]
-            else:
-                fill_value = df[col].mean()
-            df[col] = df[col].fillna(fill_value)
-            state.append_log(
-                f"Preprocessing fallback: filled missing values in {col} with {fill_value}"
-            )
-            fallback_lines.append(
-                f"df['{col}'] = df['{col}'].fillna({repr(fill_value)})"
-            )
+    for msg in logs:
+        state.append_log(f"Preprocessing: {msg}")
+    if rationale := parsed.get('rationale'):
+        state.append_log(f"Preprocessing rationale: {rationale}")
+    state.append_code(stage_name, code)
     state.df = df
-    if fallback_lines:
-        state.append_code(stage_name, "\n".join(fallback_lines))
     return state

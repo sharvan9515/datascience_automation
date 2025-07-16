@@ -9,16 +9,16 @@ from automation.pipeline_state import PipelineState
 from sklearn.decomposition import PCA
 
 
-def _query_llm(prompt: str) -> str | None:
-    """Return raw LLM response or ``None`` if the call fails."""
+def _query_llm(prompt: str) -> str:
+    """Return raw LLM response or raise ``RuntimeError`` on failure."""
 
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return None
+        raise RuntimeError("OPENAI_API_KEY environment variable is required")
     try:
         import openai
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError("openai package is required") from exc
 
     client = openai.OpenAI(api_key=api_key)
     try:
@@ -28,8 +28,8 @@ def _query_llm(prompt: str) -> str | None:
             temperature=0.0,
         )
         return resp.choices[0].message.content.strip()
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"LLM call failed: {exc}") from exc
 
 
 def run(state: PipelineState) -> PipelineState:
@@ -63,25 +63,17 @@ def run(state: PipelineState) -> PipelineState:
     )
 
     llm_raw = _query_llm(prompt)
-    apply_pca = None
-    reason = ""
-    if llm_raw:
-        try:
-            parsed = json.loads(llm_raw)
-            decision = str(parsed.get("apply_pca", "")).lower()
-            apply_pca = decision.startswith("y")
-            reason = parsed.get("reason", "")
-        except Exception:
-            apply_pca = None
+    try:
+        parsed = json.loads(llm_raw)
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"Failed to parse LLM response: {exc}") from exc
 
-    if apply_pca is None:
-        # fallback heuristic
-        apply_pca = len(feature_cols) > 20 or high_corr_ratio > 0.3
-        reason = (
-            "heuristic: many features" if len(feature_cols) > 20 else "heuristic: high correlation"
-            if apply_pca
-            else "heuristic: dimensionality acceptable"
-        )
+    if not isinstance(parsed, dict) or "apply_pca" not in parsed:
+        raise RuntimeError("LLM response missing 'apply_pca'")
+
+    decision = str(parsed.get("apply_pca", "")).lower()
+    apply_pca = decision.startswith("y")
+    reason = parsed.get("reason", "")
 
     if not apply_pca:
         state.append_log(f"FeatureReduction: skipped PCA - {reason}")

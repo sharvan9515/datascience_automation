@@ -4,15 +4,15 @@ import os
 from automation.pipeline_state import PipelineState
 
 
-def _query_llm(prompt: str) -> str | None:
-    """Return raw LLM response or None if call fails."""
+def _query_llm(prompt: str) -> str:
+    """Return raw LLM response or raise ``RuntimeError`` on failure."""
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return None
+        raise RuntimeError("OPENAI_API_KEY environment variable is required")
     try:
         import openai
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError("openai package is required") from exc
 
     client = openai.OpenAI(api_key=api_key)
     try:
@@ -22,8 +22,8 @@ def _query_llm(prompt: str) -> str | None:
             temperature=0.0,
         )
         return resp.choices[0].message.content.strip()
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"LLM call failed: {exc}") from exc
 
 
 def run(state: PipelineState) -> PipelineState:
@@ -39,31 +39,23 @@ def run(state: PipelineState) -> PipelineState:
     )
 
     llm_raw = _query_llm(prompt)
-    proposals = None
-    if llm_raw:
-        try:
-            proposals = json.loads(llm_raw)
-        except json.JSONDecodeError:
-            proposals = None
+    try:
+        proposals = json.loads(llm_raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Failed to parse LLM response: {exc}") from exc
 
-    if isinstance(proposals, list):
-        for prop in proposals:
-            name = prop.get("name")
-            formula = prop.get("formula")
-            rationale = prop.get("rationale")
-            if name and formula:
-                state.features.append(name)
-                state.append_log(
-                    f"FeatureIdeation: propose {name} = {formula} because {rationale}"
-                )
-        if proposals:
-            return state
+    if not isinstance(proposals, list) or not proposals:
+        raise RuntimeError("LLM did not return any feature proposals")
 
-    # Fallback: simple ratio of first two numeric columns
-    numeric_cols = [c for c in state.df.columns if state.df[c].dtype != "O" and c != state.target]
-    if len(numeric_cols) >= 2:
-        feat_name = f"{numeric_cols[0]}_over_{numeric_cols[1]}"
-        formula = f"{numeric_cols[0]} / ({numeric_cols[1]} + 1e-6)"
-        state.append_log(f"FeatureIdeation fallback: {feat_name} = {formula}")
-        state.features.append(feat_name)
+    for prop in proposals:
+        name = prop.get("name")
+        formula = prop.get("formula")
+        rationale = prop.get("rationale")
+        if not name or not formula:
+            raise RuntimeError("LLM proposal missing 'name' or 'formula'")
+        state.features.append(name)
+        state.append_log(
+            f"FeatureIdeation: propose {name} = {formula} because {rationale}"
+        )
+
     return state

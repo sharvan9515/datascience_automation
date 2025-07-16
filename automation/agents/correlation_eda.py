@@ -3,15 +3,15 @@ import pandas as pd
 from automation.pipeline_state import PipelineState
 
 
-def _query_llm(prompt: str) -> str | None:
-    """Return raw LLM response or None if call fails."""
+def _query_llm(prompt: str) -> str:
+    """Return raw LLM response or raise ``RuntimeError`` on failure."""
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return None
+        raise RuntimeError("OPENAI_API_KEY environment variable is required")
     try:
         import openai
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError("openai package is required") from exc
 
     client = openai.OpenAI(api_key=api_key)
     try:
@@ -21,8 +21,8 @@ def _query_llm(prompt: str) -> str | None:
             temperature=0.0,
         )
         return resp.choices[0].message.content.strip()
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"LLM call failed: {exc}") from exc
 
 
 def run(state: PipelineState) -> PipelineState:
@@ -76,12 +76,6 @@ def run(state: PipelineState) -> PipelineState:
 
     summary = _query_llm(prompt)
     if not summary:
-        # Basic fallback summary
-        summary = (
-            f"Top correlations with {state.target}: "
-            + ", ".join(f"{k}={v:.2f}" for k, v in top_corr.items())
-        )
-        if redundant:
-            summary += ". Redundant pairs: " + ", ".join(f"{a}-{b}" for a, b in redundant[:3])
+        raise RuntimeError("LLM did not return a summary for correlation EDA")
     state.append_log(f"CorrelationEDA: {summary}")
     return state

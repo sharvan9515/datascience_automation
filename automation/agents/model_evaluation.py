@@ -17,16 +17,16 @@ from sklearn.metrics import (
 from sklearn.linear_model import LogisticRegression, LinearRegression
 
 
-def _query_llm(prompt: str) -> str | None:
-    """Return raw LLM response or ``None`` if the call fails."""
+def _query_llm(prompt: str) -> str:
+    """Return raw LLM response or raise ``RuntimeError`` on failure."""
 
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return None
+        raise RuntimeError("OPENAI_API_KEY environment variable is required")
     try:
         import openai
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError("openai package is required") from exc
 
     client = openai.OpenAI(api_key=api_key)
     try:
@@ -36,8 +36,8 @@ def _query_llm(prompt: str) -> str | None:
             temperature=0.0,
         )
         return resp.choices[0].message.content.strip()
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"LLM call failed: {exc}") from exc
 
 
 def run(state: PipelineState) -> PipelineState:
@@ -89,30 +89,17 @@ def run(state: PipelineState) -> PipelineState:
     )
 
     llm_raw = _query_llm(prompt)
-    iterate = None
-    reason = ""
-    suggestions = ""
-    if llm_raw:
-        try:
-            parsed = json.loads(llm_raw)
-            iterate = str(parsed.get("iterate", "")).lower().startswith("y")
-            reason = parsed.get("reason", "")
-            suggestions = parsed.get("suggestions", "")
-        except Exception:
-            iterate = None
+    try:
+        parsed = json.loads(llm_raw)
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"Failed to parse LLM response: {exc}") from exc
 
-    if iterate is None:
-        # basic heuristic fallback
-        if state.task_type == "classification":
-            iterate = acc < 0.9
-            reason = (
-                "heuristic: accuracy < 0.9" if iterate else "heuristic: accuracy sufficient"
-            )
-        else:
-            iterate = r2 < 0.8
-            reason = (
-                "heuristic: r2 < 0.8" if iterate else "heuristic: r2 sufficient"
-            )
+    if not isinstance(parsed, dict) or "iterate" not in parsed:
+        raise RuntimeError("LLM response missing 'iterate'")
+
+    iterate = str(parsed.get("iterate", "")).lower().startswith("y")
+    reason = parsed.get("reason", "")
+    suggestions = parsed.get("suggestions", "")
 
     state.iterate = bool(iterate)
     log_msg = f"ModelEvaluation decision: iterate={state.iterate} - {reason}".strip()

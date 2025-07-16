@@ -31,16 +31,16 @@ STEP_AGENTS = {
 }
 
 
-def _query_llm(prompt: str) -> str | None:
-    """Return raw LLM response or ``None`` if the call fails."""
+def _query_llm(prompt: str) -> str:
+    """Return raw LLM response or raise ``RuntimeError`` on failure."""
 
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return None
+        raise RuntimeError("OPENAI_API_KEY environment variable is required")
     try:
         import openai
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError("openai package is required") from exc
 
     client = openai.OpenAI(api_key=api_key)
     try:
@@ -50,8 +50,8 @@ def _query_llm(prompt: str) -> str | None:
             temperature=0.0,
         )
         return resp.choices[0].message.content.strip()
-    except Exception:
-        return None
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"LLM call failed: {exc}") from exc
 
 
 def _decide_steps(state: PipelineState) -> Dict[str, Dict[str, object]]:
@@ -70,26 +70,22 @@ def _decide_steps(state: PipelineState) -> Dict[str, Dict[str, object]]:
     )
 
     llm_raw = _query_llm(prompt)
-    decisions: Dict[str, Dict[str, object]] = {}
-    if llm_raw:
-        try:
-            parsed = json.loads(llm_raw)
-            if isinstance(parsed, dict):
-                for step in STEP_AGENTS:
-                    entry = parsed.get(step, {})
-                    if isinstance(entry, dict):
-                        run_flag = str(entry.get("run", "")).lower().startswith("y")
-                        reason = entry.get("reason", "")
-                    else:
-                        run_flag = str(entry).lower().startswith("y")
-                        reason = ""
-                    decisions[step] = {"run": run_flag, "reason": reason}
-        except Exception:
-            decisions = {}
+    try:
+        parsed = json.loads(llm_raw)
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"Failed to parse LLM response: {exc}") from exc
 
-    # fallback: run everything if parsing failed
+    if not isinstance(parsed, dict):
+        raise RuntimeError("LLM response must be a JSON object")
+
+    decisions: Dict[str, Dict[str, object]] = {}
     for step in STEP_AGENTS:
-        decisions.setdefault(step, {"run": True, "reason": "fallback: default yes"})
+        entry = parsed.get(step)
+        if not isinstance(entry, dict) or "run" not in entry:
+            raise RuntimeError(f"LLM response missing decision for step '{step}'")
+        run_flag = str(entry.get("run", "")).lower().startswith("y")
+        reason = entry.get("reason", "")
+        decisions[step] = {"run": run_flag, "reason": reason}
     return decisions
 
 
