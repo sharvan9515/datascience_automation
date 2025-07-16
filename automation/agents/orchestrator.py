@@ -58,7 +58,9 @@ def _query_llm(prompt: str) -> str:
         }
     )
 
-    return query_llm(prompt, few_shot=[(example_user, example_assistant)])
+    return query_llm(
+        prompt, few_shot=[(example_user, example_assistant)], expect_json=True
+    )
 
 
 def _decide_steps(state: PipelineState) -> Dict[str, Dict[str, object]]:
@@ -137,7 +139,22 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
                 continue
 
             trial_df = local_vars.get("df", trial_df)
-            trial_score = _compute_score(trial_df, state.target, state.task_type)
+            try:
+                trial_score = _compute_score(
+                    trial_df, state.target, state.task_type
+                )
+            except Exception as exc:  # noqa: BLE001
+                state.append_log(f"{stage}: scoring failed: {exc}")
+                state.snippet_history.append(
+                    {
+                        "iteration": state.iteration,
+                        "stage": stage,
+                        "snippet": snippet,
+                        "accepted": False,
+                        "score": None,
+                    }
+                )
+                continue
 
             if trial_score > (state.current_score or 0.0):
                 delta = trial_score - (state.current_score or 0.0)

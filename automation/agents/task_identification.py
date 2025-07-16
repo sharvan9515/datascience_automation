@@ -6,7 +6,7 @@ from ..prompt_utils import query_llm
 def _query_llm(prompt: str) -> str:
     """Wrapper around :func:`query_llm` with no examples."""
 
-    return query_llm(prompt)
+    return query_llm(prompt, expect_json=True)
 
 
 def run(state: PipelineState) -> PipelineState:

@@ -18,7 +18,7 @@ from sklearn.svm import SVC, SVR
 def _query_llm(prompt: str) -> str:
     """Wrapper around :func:`query_llm` with no examples."""
 
-    return query_llm(prompt)
+    return query_llm(prompt, expect_json=True)
 
 
 MODEL_MAP = {
@@ -40,8 +40,11 @@ def run(state: PipelineState) -> PipelineState:
 
     df = state.df
     stage_name = "model_training"
-    X = df.drop(columns=[state.target])
+    X = df.drop(columns=[state.target]).copy()
     y = df[state.target]
+    for col in X.select_dtypes(include="object").columns:
+        X[col] = X[col].astype("category").cat.codes
+    X = X.fillna(0)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )

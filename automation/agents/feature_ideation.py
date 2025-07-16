@@ -7,7 +7,7 @@ from ..prompt_utils import query_llm
 def _query_llm(prompt: str) -> str:
     """Wrapper around :func:`query_llm` with no examples."""
 
-    return query_llm(prompt)
+    return query_llm(prompt, expect_json=True)
 
 
 def run(state: PipelineState) -> PipelineState:
@@ -27,6 +27,9 @@ def run(state: PipelineState) -> PipelineState:
         proposals = json.loads(llm_raw)
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"Failed to parse LLM response: {exc}") from exc
+
+    if isinstance(proposals, dict):
+        proposals = proposals.get("features", [])
 
     if not isinstance(proposals, list) or not proposals:
         raise RuntimeError("LLM did not return any feature proposals")

@@ -24,7 +24,7 @@ __all__ = ["compute_score", "run"]
 def _query_llm(prompt: str) -> str:
     """Wrapper around :func:`query_llm` with no examples."""
 
-    return query_llm(prompt)
+    return query_llm(prompt, expect_json=True)
 
 
 def compute_score(df: pd.DataFrame, target: str, task_type: str) -> float:
@@ -32,6 +32,10 @@ def compute_score(df: pd.DataFrame, target: str, task_type: str) -> float:
 
     X = df.drop(columns=[target])
     y = df[target]
+    X = X.copy()
+    for col in X.select_dtypes(include="object").columns:
+        X[col] = X[col].astype("category").cat.codes
+    X = X.fillna(0)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
@@ -51,8 +55,11 @@ def run(state: PipelineState) -> PipelineState:
     """Train a quick model, analyze metrics, and consult the LLM for advice."""
 
     df = state.df
-    X = df.drop(columns=[state.target])
+    X = df.drop(columns=[state.target]).copy()
     y = df[state.target]
+    for col in X.select_dtypes(include="object").columns:
+        X[col] = X[col].astype("category").cat.codes
+    X = X.fillna(0)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
