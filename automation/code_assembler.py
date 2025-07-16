@@ -13,6 +13,7 @@ ORDER = [
     "feature_selection",
     "feature_reduction",
     "model_training",
+    "hyperparameter_search",
 ]
 
 __all__ = ["run"]
@@ -25,7 +26,7 @@ def run(state: PipelineState) -> PipelineState:
 
     lines: list[str] = [
         "import pandas as pd",
-        "from sklearn.model_selection import train_test_split",
+        "from sklearn.model_selection import train_test_split, GridSearchCV",
         "from sklearn.decomposition import PCA",
         "from sklearn.linear_model import LogisticRegression, LinearRegression",
         "from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor",
