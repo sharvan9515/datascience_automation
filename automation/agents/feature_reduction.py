@@ -60,14 +60,14 @@ def run(state: PipelineState) -> PipelineState:
 
     if apply_pca:
         state.append_log(f"FeatureReduction: PCA recommended - {reason}")
+        code_snippet = (
+            "pca = PCA(n_components=0.9)\n"
+            f"components = pca.fit_transform(df[{feature_cols!r}])\n"
+            "comp_cols = [f'pc{i+1}' for i in range(components.shape[1])]\n"
+            "df = df[[target]].join(pd.DataFrame(components, columns=comp_cols, index=df.index))"
+        )
+        state.append_pending_code(stage_name, code_snippet)
     else:
         state.append_log(f"FeatureReduction: skipped PCA - {reason}")
 
-    code_snippet = (
-        "pca = PCA(n_components=0.9)\n"
-        f"components = pca.fit_transform(df[{feature_cols!r}])\n"
-        "comp_cols = [f'pc{i+1}' for i in range(components.shape[1])]\n"
-        "df = df[[target]].join(pd.DataFrame(components, columns=comp_cols, index=df.index))"
-    )
-    state.append_pending_code(stage_name, code_snippet)
     return state
