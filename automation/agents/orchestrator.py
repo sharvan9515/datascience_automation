@@ -3,13 +3,13 @@ from __future__ import annotations
 """LLM-driven orchestration of data science agents."""
 
 import json
-import os
 from typing import Dict
 
 import pandas as pd
 from sklearn.decomposition import PCA
 
 from automation.pipeline_state import PipelineState
+from ..prompt_utils import query_llm
 from . import (
     task_identification,
     preprocessing,
@@ -41,26 +41,23 @@ STEP_AGENTS = {
 
 
 def _query_llm(prompt: str) -> str:
-    """Return raw LLM response or raise ``RuntimeError`` on failure."""
+    """Query the LLM with a few-shot example for deterministic JSON output."""
 
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY environment variable is required")
-    try:
-        import openai
-    except Exception as exc:  # noqa: BLE001
-        raise RuntimeError("openai package is required") from exc
+    example_user = (
+        "Rows: 10\nSchema: {'a': 'int64', 'b': 'float64'}\nRecent logs: []"
+    )
+    example_assistant = json.dumps(
+        {
+            "preprocessing": {"run": "yes", "reason": "clean"},
+            "correlation_eda": {"run": "no", "reason": "few features"},
+            "feature_ideation": {"run": "yes", "reason": "improve"},
+            "feature_implementation": {"run": "yes", "reason": "apply"},
+            "feature_selection": {"run": "no", "reason": "none yet"},
+            "feature_reduction": {"run": "no", "reason": "small"},
+        }
+    )
 
-    client = openai.OpenAI(api_key=api_key)
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-        )
-        return resp.choices[0].message.content.strip()
-    except Exception as exc:  # noqa: BLE001
-        raise RuntimeError(f"LLM call failed: {exc}") from exc
+    return query_llm(prompt, few_shot=[(example_user, example_assistant)])
 
 
 def _decide_steps(state: PipelineState) -> Dict[str, Dict[str, object]]:
