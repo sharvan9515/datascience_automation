@@ -33,7 +33,7 @@ def _query_llm(prompt: str) -> str:
 
 
 def run(state: PipelineState) -> PipelineState:
-    """Consult an LLM on PCA usage and apply if recommended."""
+    """Consult an LLM on PCA usage and queue PCA code if recommended."""
 
     df = state.df
     stage_name = "feature_reduction"
@@ -75,31 +75,16 @@ def run(state: PipelineState) -> PipelineState:
     apply_pca = decision.startswith("y")
     reason = parsed.get("reason", "")
 
-    if not apply_pca:
+    if apply_pca:
+        state.append_log(f"FeatureReduction: PCA recommended - {reason}")
+    else:
         state.append_log(f"FeatureReduction: skipped PCA - {reason}")
-        return state
 
-    pca = PCA(n_components=0.9)
-    try:
-        components = pca.fit_transform(df[feature_cols])
-    except Exception as e:
-        state.append_log(f"FeatureReduction: PCA failed ({e})")
-        return state
-
-    comp_cols = [f"pc{i+1}" for i in range(components.shape[1])]
-    state.df = df[[state.target]].join(
-        pd.DataFrame(components, columns=comp_cols, index=df.index)
-    )
-    state.append_log(
-        "FeatureReduction: "
-        + reason
-        + f" Applied PCA -> {len(comp_cols)} components"
-    )
     code_snippet = (
         "pca = PCA(n_components=0.9)\n"
         f"components = pca.fit_transform(df[{feature_cols!r}])\n"
         "comp_cols = [f'pc{i+1}' for i in range(components.shape[1])]\n"
         "df = df[[target]].join(pd.DataFrame(components, columns=comp_cols, index=df.index))"
     )
-    state.append_code(stage_name, code_snippet)
+    state.append_pending_code(stage_name, code_snippet)
     return state
