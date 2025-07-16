@@ -40,6 +40,26 @@ def _query_llm(prompt: str) -> str:
         raise RuntimeError(f"LLM call failed: {exc}") from exc
 
 
+def compute_score(df, target: str, task_type: str) -> float:
+    """Return a simple train/test score for the given dataset."""
+
+    X = df.drop(columns=[target])
+    y = df[target]
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+    if task_type == "classification":
+        model = LogisticRegression(max_iter=200)
+        model.fit(X_train, y_train)
+        preds = model.predict(X_test)
+        return accuracy_score(y_test, preds)
+
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+    preds = model.predict(X_test)
+    return r2_score(y_test, preds)
+
+
 def run(state: PipelineState) -> PipelineState:
     """Train a quick model, analyze metrics, and consult the LLM for advice."""
 
