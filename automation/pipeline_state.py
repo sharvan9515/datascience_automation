@@ -19,6 +19,7 @@ class PipelineState:
     best_df: Optional[pd.DataFrame] = None
     best_code_blocks: dict[str, list[str]] = field(default_factory=dict)
     best_features: List[str] = field(default_factory=list)
+    best_params: dict[str, object] = field(default_factory=dict)
     patience: int = 5
     no_improve_rounds: int = 0
     iteration: int = 0

@@ -20,6 +20,7 @@ from . import (
     feature_reduction,
     model_training,
     model_evaluation,
+    hyperparameter_search,
 )
 from .. import code_assembler
 
@@ -171,6 +172,10 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
 
     state = model_training.run(state)
     state = model_evaluation.run(state)
+    if state.no_improve_rounds >= max(1, state.patience // 2):
+        state.append_log("Orchestrator: triggering hyperparameter search")
+        state = hyperparameter_search.run(state)
+
     state.current_score = _compute_score(state.df, state.target, state.task_type)
 
     if state.best_score is not None and state.best_score > prev_best_score:
