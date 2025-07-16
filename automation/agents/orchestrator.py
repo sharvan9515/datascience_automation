@@ -41,14 +41,14 @@ def _query_llm(prompt: str) -> str | None:
     except Exception:
         return None
 
-    openai.api_key = api_key
+    client = openai.OpenAI(api_key=api_key)
     try:
-        resp = openai.ChatCompletion.create(
+        resp = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0,
         )
-        return resp.choices[0].message["content"].strip()
+        return resp.choices[0].message.content.strip()
     except Exception:
         return None
 
