@@ -1,10 +1,10 @@
-"""Implement proposed features using LLM generated pandas code."""
+"""Generate feature implementation code via LLM and queue it for later execution."""
 
 from __future__ import annotations
 
 import json
 import os
-import pandas as pd
+
 
 from automation.pipeline_state import PipelineState
 
@@ -33,16 +33,15 @@ def _query_llm(prompt: str) -> str:
 
 
 def run(state: PipelineState) -> PipelineState:
-    """Generate pandas code for each feature and execute it safely."""
+    """Generate pandas code for each feature and queue it for validation."""
 
-    df = state.df.copy()
     stage_name = "feature_implementation"
 
     if not state.features:
         # Nothing to implement
         return state
 
-    schema = {col: str(df[col].dtype) for col in df.columns}
+    schema = {col: str(state.df[col].dtype) for col in state.df.columns}
 
     base_prompt = (
         "You are a pandas expert. Given a DataFrame `df` with columns "
@@ -62,40 +61,8 @@ def run(state: PipelineState) -> PipelineState:
 
     code = parsed.get("code", "")
     logs = parsed.get("logs", [])
-    success = False
-
-    # allow two retries with error feedback
-    for attempt in range(3):
-        local_env = {"df": df, "pd": pd}
-        try:
-            exec(code, {}, local_env)
-            df = local_env["df"]
-            success = True
-            break
-        except Exception as e:  # noqa: BLE001
-            error_prompt = (
-                base_prompt
-                + f" The previous code failed with: {e}. "
-                "Please return corrected JSON with 'code' and 'logs'."
-            )
-            llm_resp = _query_llm(error_prompt)
-            if not llm_resp:
-                break
-            try:
-                parsed = json.loads(llm_resp)
-            except json.JSONDecodeError:
-                parsed = None
-            if not parsed or "code" not in parsed:
-                break
-            code = parsed.get("code", "")
-            logs = parsed.get("logs", [])
-            state.append_log("FeatureImplementation: retrying after error")
-
-    if not success:
-        raise RuntimeError("LLM-provided feature implementation code failed")
-
     for msg in logs or []:
         state.append_log(f"FeatureImplementation: {msg}")
-    state.append_code(stage_name, code)
-    state.df = df
+
+    state.append_pending_code(stage_name, code)
     return state
