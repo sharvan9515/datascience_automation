@@ -10,6 +10,8 @@ class PipelineState:
     iterate: bool = False
     log: List[str] = field(default_factory=list)
     features: List[str] = field(default_factory=list)
+    feature_ideas: list[dict] = field(default_factory=list)
+    known_features: set[str] = field(default_factory=set)
     pending_code: dict[str, list[str]] = field(default_factory=dict)
     code_blocks: dict[str, list[str]] = field(default_factory=dict)
     current_score: float | None = None
