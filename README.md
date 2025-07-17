@@ -39,10 +39,10 @@ built‑in heuristics.
    python -m automation.pipeline iris.csv target --max-iter 15 --patience 3
    ```
 
-   The script produces a detailed log of each agent step. If the environment
-   variable `OPENAI_API_KEY` is set, the orchestrator consults the OpenAI API for
-   smarter decisions; otherwise if there is no llm access it should raise an error
-   After completion you will find:
+   The script produces a detailed log of each agent step. The pipeline checks
+   that the environment variable `OPENAI_API_KEY` is set before starting.
+   When provided the orchestrator consults the OpenAI API for smarter decisions;
+   otherwise it raises an error. After completion you will find:
 
    - `pipeline.py` – assembled code for the final pipeline
    - `output/` – directory containing logs, iteration history and a short report
