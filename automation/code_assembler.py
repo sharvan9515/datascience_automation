@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import argparse
 
 from automation.pipeline_state import PipelineState
 
@@ -25,6 +26,8 @@ def run(state: PipelineState) -> PipelineState:
     os.makedirs("artifacts", exist_ok=True)
 
     lines: list[str] = [
+        "import argparse",
+        "import os",
         "import pandas as pd",
         "from sklearn.model_selection import train_test_split, GridSearchCV",
         "from sklearn.decomposition import PCA",
@@ -32,14 +35,31 @@ def run(state: PipelineState) -> PipelineState:
         "from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor",
         "from sklearn.svm import SVC, SVR",
         "import joblib",
+        "",
+        "def main(args: list[str] | None = None) -> None:",
+        "    parser = argparse.ArgumentParser(description='Run assembled pipeline')",
+        "    parser.add_argument('csv', help='Path to CSV file')",
+        "    parser.add_argument('target', help='Target column name')",
+        "    parser.add_argument('--max-iter', type=int, default=10, help='Maximum iterations')",
+        "    parser.add_argument('--patience', type=int, default=5, help='Rounds without improvement')",
+        "    parsed = parser.parse_args(args)",
+        "    df = pd.read_csv(parsed.csv)",
+        "    target = parsed.target",
     ]
 
     for stage in ORDER:
         for snippet in state.code_blocks.get(stage, []):
-            lines.append(snippet)
+            for line in snippet.splitlines():
+                lines.append(f'    {line}')
+
+    lines.extend([
+        "",
+        "if __name__ == '__main__':",
+        "    main()",
+    ])
 
     with open("pipeline.py", "w") as f:
-        f.write("\n\n".join(lines))
+        f.write("\n".join(lines))
 
     with open("output/logs.json", "w") as f:
         json.dump(state.log, f, indent=2)

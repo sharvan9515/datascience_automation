@@ -44,9 +44,15 @@ built‑in heuristics.
    smarter decisions; otherwise deterministic heuristics are used.
 
    After completion you will find:
-   
+
    - `pipeline.py` – assembled code for the final pipeline
    - `output/` – directory containing logs, iteration history and a short report
+
+   The generated `pipeline.py` can be run standalone on the CSV using:
+
+   ```bash
+   python pipeline.py iris.csv target
+   ```
 
 The script prints log entries from every agent step.  Example output:
 
