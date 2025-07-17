@@ -41,8 +41,7 @@ built‑in heuristics.
 
    The script produces a detailed log of each agent step. If the environment
    variable `OPENAI_API_KEY` is set, the orchestrator consults the OpenAI API for
-   smarter decisions; otherwise deterministic heuristics are used.
-
+   smarter decisions; otherwise if there is no llm access it should raise an error
    After completion you will find:
 
    - `pipeline.py` – assembled code for the final pipeline
@@ -57,9 +56,8 @@ built‑in heuristics.
 The script prints log entries from every agent step.  Example output:
 
 ```
-TaskIdentification: LLM unclear, used heuristic task_type=classification
-...
-ModelEvaluation decision: iterate=False - heuristic: accuracy sufficient
+TaskIdentification: LLM resonpse
+ModelEvaluation decision: iterate=False -LLM decision 
 ```
 
 See [AGENTS.md](AGENTS.md) for a description of each agent in the pipeline.
