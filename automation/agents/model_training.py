@@ -37,6 +37,7 @@ def _normalize(name: str) -> str:
 
 def run(state: PipelineState) -> PipelineState:
     """Train a model suggested by the LLM and log metrics."""
+    state.append_log("Model training supervisor: starting")
 
     df = state.df
     stage_name = "model_training"

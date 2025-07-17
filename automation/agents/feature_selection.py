@@ -17,6 +17,7 @@ def _query_llm(prompt: str) -> str:
 
 def run(state: PipelineState) -> PipelineState:
     """Evaluate new features incrementally and keep only beneficial ones."""
+    state.append_log("Feature engineering supervisor: selection start")
 
     df = state.df.copy()
     stage_name = "feature_selection"

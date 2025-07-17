@@ -17,6 +17,7 @@ def _query_llm(prompt: str) -> str:
 
 def run(state: PipelineState) -> PipelineState:
     """Consult an LLM on PCA usage and queue PCA code if recommended."""
+    state.append_log("Feature engineering supervisor: reduction start")
 
     df = state.df
     stage_name = "feature_reduction"

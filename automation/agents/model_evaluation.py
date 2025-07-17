@@ -53,6 +53,7 @@ def compute_score(df: pd.DataFrame, target: str, task_type: str) -> float:
 
 def run(state: PipelineState) -> PipelineState:
     """Train a quick model, analyze metrics, and consult the LLM for advice."""
+    state.append_log("Evaluator supervisor: starting")
 
     df = state.df
     X = df.drop(columns=[state.target]).copy()
