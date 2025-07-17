@@ -220,6 +220,8 @@ def run(state: PipelineState, max_iter: int = 10, patience: int = 5) -> Pipeline
         Stop after this many iterations without improvement.
     """
 
+    state.append_log("Orchestrator supervisor: booting pipeline")
+
     state.best_score = None
     state.no_improve_rounds = 0
     state.max_iter = max_iter

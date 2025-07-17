@@ -17,6 +17,7 @@ def _query_llm(prompt: str) -> str:
 
 def run(state: PipelineState) -> PipelineState:
     """Generate pandas code for each feature and queue it for validation."""
+    state.append_log("Feature engineering supervisor: implementation start")
 
     stage_name = "feature_implementation"
 

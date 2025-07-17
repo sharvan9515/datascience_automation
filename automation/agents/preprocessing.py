@@ -12,6 +12,8 @@ def _query_llm(prompt: str) -> str:
 
 def run(state: PipelineState) -> PipelineState:
     """Query the LLM for preprocessing code and store it for later execution."""
+    state.append_log("Preprocessing supervisor: starting")
+
     df = state.df.copy()
     stage_name = "preprocessing"
 

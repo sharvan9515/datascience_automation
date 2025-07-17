@@ -22,6 +22,8 @@ __all__ = ["run"]
 
 def run(state: PipelineState) -> PipelineState:
     """Assemble the generated code blocks and persist pipeline artifacts."""
+    state.append_log("Code assembler supervisor: assembling pipeline")
+
     os.makedirs("output", exist_ok=True)
     os.makedirs("artifacts", exist_ok=True)
 

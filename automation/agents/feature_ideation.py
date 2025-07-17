@@ -12,6 +12,8 @@ def _query_llm(prompt: str) -> str:
 
 def run(state: PipelineState) -> PipelineState:
     """Ask the LLM for new feature ideas and store them in the state."""
+    state.append_log("Feature engineering supervisor: ideation start")
+
     feature_cols = [c for c in state.df.columns if c != state.target]
 
     prompt = (
