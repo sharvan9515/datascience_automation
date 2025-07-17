@@ -47,6 +47,9 @@ class Agent(BaseAgent):
             rationale = prop.get("rationale")
             if not name or not formula:
                 raise RuntimeError("LLM proposal missing 'name' or 'formula'")
+            if name in state.known_features:
+                state.append_log(f"FeatureIdeation: skip duplicate feature '{name}'")
+                continue
             state.features.append(name)
             state.known_features.add(name)
             state.feature_ideas.append({"name": name, "formula": formula, "rationale": rationale})
