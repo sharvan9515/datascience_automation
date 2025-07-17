@@ -10,18 +10,17 @@ from sklearn.decomposition import PCA
 
 from automation.pipeline_state import PipelineState
 from ..prompt_utils import query_llm
-from . import (
-    task_identification,
-    preprocessing,
-    correlation_eda,
-    feature_ideation,
-    feature_implementation,
-    feature_selection,
-    feature_reduction,
-    model_training,
-    model_evaluation,
-    hyperparameter_search,
-)
+from .task_identification import Agent as TaskIdentificationAgent
+from .preprocessing import Agent as PreprocessingAgent
+from .correlation_eda import Agent as CorrelationEDAAgent
+from .feature_ideation import Agent as FeatureIdeationAgent
+from .feature_implementation import Agent as FeatureImplementationAgent
+from .feature_selection import Agent as FeatureSelectionAgent
+from .feature_reduction import Agent as FeatureReductionAgent
+from .model_training import Agent as ModelTrainingAgent
+from .model_evaluation import Agent as ModelEvaluationAgent
+from .hyperparameter_search import Agent as HyperparameterSearchAgent
+from . import model_evaluation
 from .. import code_assembler
 
 
@@ -32,12 +31,12 @@ def _compute_score(df: pd.DataFrame, target: str, task_type: str) -> float:
 
 
 STEP_AGENTS = {
-    "preprocessing": preprocessing,
-    "correlation_eda": correlation_eda,
-    "feature_ideation": feature_ideation,
-    "feature_implementation": feature_implementation,
-    "feature_selection": feature_selection,
-    "feature_reduction": feature_reduction,
+    "preprocessing": PreprocessingAgent(),
+    "correlation_eda": CorrelationEDAAgent(),
+    "feature_ideation": FeatureIdeationAgent(),
+    "feature_implementation": FeatureImplementationAgent(),
+    "feature_selection": FeatureSelectionAgent(),
+    "feature_reduction": FeatureReductionAgent(),
 }
 
 
@@ -96,6 +95,9 @@ def _decide_steps(state: PipelineState) -> Dict[str, Dict[str, object]]:
         run_flag = str(entry.get("run", "")).lower().startswith("y")
         reason = entry.get("reason", "")
         decisions[step] = {"run": run_flag, "reason": reason}
+
+    if decisions.get("feature_ideation", {}).get("run"):
+        decisions.setdefault("feature_implementation", {})["run"] = True
     return decisions
 
 
@@ -187,11 +189,11 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
 
         state.pending_code[stage] = []
 
-    state = model_training.run(state)
-    state = model_evaluation.run(state)
+    state = ModelTrainingAgent().run(state)
+    state = ModelEvaluationAgent().run(state)
     if state.no_improve_rounds >= max(1, state.patience // 2):
         state.append_log("Orchestrator: triggering hyperparameter search")
-        state = hyperparameter_search.run(state)
+        state = HyperparameterSearchAgent().run(state)
 
     state.current_score = _compute_score(state.df, state.target, state.task_type)
 
@@ -235,7 +237,7 @@ def run(state: PipelineState, max_iter: int = 10, patience: int = 5) -> Pipeline
         state.pending_code.setdefault(step, [])
         state.code_blocks.setdefault(step, [])
 
-    state = task_identification.run(state)
+    state = TaskIdentificationAgent().run(state)
     state.iteration = 0
     state.iterate = True
 
