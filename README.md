@@ -11,6 +11,10 @@ built‑in heuristics.
 
 1. **Install the requirements**
 
+   Ensure you are using Python 3.12 or later. The project relies on
+   `openai>=1.0.0` and other modern versions of the dependencies listed in
+   `requirements.txt`.
+
    ```bash
    pip install -r requirements.txt
    ```
