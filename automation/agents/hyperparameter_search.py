@@ -14,8 +14,11 @@ __all__ = ["run"]
 def run(state: PipelineState) -> PipelineState:
     """Run grid search to tune a RandomForest model."""
     df = state.df
-    X = df.drop(columns=[state.target])
+    X = df.drop(columns=[state.target]).copy()
     y = df[state.target]
+    for col in X.select_dtypes(include="object").columns:
+        X[col] = X[col].astype("category").cat.codes
+    X = X.fillna(0)
     X_train, X_test, y_train, _ = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
