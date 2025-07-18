@@ -4,6 +4,12 @@ from __future__ import annotations
 
 import json
 import re
+import numpy as np
+import pandas as pd
+import sklearn
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder
+from sklearn.impute import SimpleImputer
+from xgboost import XGBClassifier, XGBRegressor
 
 from automation.pipeline_state import PipelineState
 from ..prompt_utils import query_llm
@@ -18,25 +24,25 @@ def _query_llm(prompt: str) -> str:
 
 
 def inject_missing_imports(code: str) -> str:
-    # Add imports for common libraries if used in code
     imports = []
-    if re.search(r'\bre\.', code) and 'import re' not in code:
+    # Unconditionally inject import re if 're' is used anywhere and not already imported
+    if 're' in code and 'import re' not in code:
         imports.append('import re')
-    if re.search(r'\bnp\.', code) and 'import numpy as np' not in code:
+    if 'np' in code and 'import numpy as np' not in code:
         imports.append('import numpy as np')
-    if re.search(r'\bpd\.', code) and 'import pandas as pd' not in code:
+    if 'pd' in code and 'import pandas as pd' not in code:
         imports.append('import pandas as pd')
-    if re.search(r'\bsklearn\.', code) and 'import sklearn' not in code:
+    if 'sklearn' in code and 'import sklearn' not in code:
         imports.append('import sklearn')
-    if re.search(r'\bLabelEncoder\b', code) and 'from sklearn.preprocessing import LabelEncoder' not in code:
+    if 'LabelEncoder' in code and 'from sklearn.preprocessing import LabelEncoder' not in code:
         imports.append('from sklearn.preprocessing import LabelEncoder')
-    if re.search(r'\bOneHotEncoder\b', code) and 'from sklearn.preprocessing import OneHotEncoder' not in code:
+    if 'OneHotEncoder' in code and 'from sklearn.preprocessing import OneHotEncoder' not in code:
         imports.append('from sklearn.preprocessing import OneHotEncoder')
-    if re.search(r'\bSimpleImputer\b', code) and 'from sklearn.impute import SimpleImputer' not in code:
+    if 'SimpleImputer' in code and 'from sklearn.impute import SimpleImputer' not in code:
         imports.append('from sklearn.impute import SimpleImputer')
-    if re.search(r'\bXGBClassifier\b', code) and 'from xgboost import XGBClassifier' not in code:
+    if 'XGBClassifier' in code and 'from xgboost import XGBClassifier' not in code:
         imports.append('from xgboost import XGBClassifier')
-    if re.search(r'\bXGBRegressor\b', code) and 'from xgboost import XGBRegressor' not in code:
+    if 'XGBRegressor' in code and 'from xgboost import XGBRegressor' not in code:
         imports.append('from xgboost import XGBRegressor')
     if imports:
         code = '\n'.join(imports) + '\n' + code
@@ -83,17 +89,27 @@ class Agent(BaseAgent):
         code = parsed.get("code", "")
         if not isinstance(code, str):
             code = str(code)
+        code = inject_missing_imports(code)
         logs = parsed.get("logs", [])
         if not isinstance(logs, list):
             logs = [str(logs)]
         for msg in logs:
             state.append_log(f"FeatureImplementation: {msg}")
 
-        # Auto-import and error handling for LLM code
-        code = inject_missing_imports(code)
+        exec_globals = {
+            're': re,
+            'np': np,
+            'pd': pd,
+            'sklearn': sklearn,
+            'LabelEncoder': LabelEncoder,
+            'OneHotEncoder': OneHotEncoder,
+            'SimpleImputer': SimpleImputer,
+            'XGBClassifier': XGBClassifier,
+            'XGBRegressor': XGBRegressor,
+        }
         try:
             local_vars = {'df': state.df.copy(), 'target': state.target}
-            exec(code, {}, local_vars)
+            exec(code, exec_globals, local_vars)
         except Exception as e:
             state.append_log(f"FeatureImplementation: LLM code failed with error: {e}")
             # Retry: prompt LLM for a fix
@@ -108,12 +124,12 @@ class Agent(BaseAgent):
                 fixed_code = parsed.get("code", "")
                 if not isinstance(fixed_code, str):
                     fixed_code = str(fixed_code)
+                fixed_code = inject_missing_imports(fixed_code)
             except Exception as e_json:
                 state.append_log(f"FeatureImplementation: LLM code retry JSON parse failed: {e_json}. Raw response: {fixed_code_json}")
                 raise RuntimeError(f"LLM did not return valid code for feature implementation. Last response: {fixed_code_json}")
-            fixed_code = inject_missing_imports(fixed_code)
             try:
-                exec(fixed_code, {}, local_vars)
+                exec(fixed_code, exec_globals, local_vars)
                 state.append_log("FeatureImplementation: LLM code retry succeeded.")
                 code = fixed_code
             except Exception as e2:

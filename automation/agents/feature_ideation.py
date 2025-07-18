@@ -70,7 +70,11 @@ class Agent(BaseAgent):
                 state.append_log(f"FeatureIdeation: LLM simple prompt JSON parse failed: {exc2}. Raw response: {llm_raw_simple}")
                 raise RuntimeError(f"LLM did not return any feature proposals. Last response: {llm_raw_simple}")
         if isinstance(proposals, dict):
-            proposals = proposals.get("features", [])
+            # If it's a dict with feature keys, wrap in a list
+            if all(k in proposals for k in ("name", "formula", "rationale")):
+                proposals = [proposals]
+            else:
+                proposals = proposals.get("features", [])
         if not isinstance(proposals, list) or not proposals:
             raise RuntimeError(f"LLM did not return any feature proposals. Last response: {llm_raw_simple if 'llm_raw_simple' in locals() else llm_raw}")
 
