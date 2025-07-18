@@ -43,6 +43,9 @@ class Agent(BaseAgent):
         state.append_log(
             f"HyperparameterSearch: best_params={search.best_params_} score={search.best_score_:.4f}"
         )
+        if state.best_score is None or search.best_score_ > state.best_score:
+            state.best_score = search.best_score_
+            state.current_score = search.best_score_
 
         joblib.dump(search.best_estimator_, "artifacts/model.pkl")
         code_snippet = (

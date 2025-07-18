@@ -29,6 +29,7 @@ class Agent(BaseAgent):
             "Given a pandas DataFrame `df` with schema "
             f"{json.dumps(schema)} and missing counts {json.dumps(missing)}, "
             "suggest preprocessing steps for machine learning. "
+            "Avoid chained assignments; use df.loc for setting values. "
             "Return JSON with keys 'logs' (list of messages describing each step) "
             "and 'code' (Python pandas code that modifies df in place)."
         )

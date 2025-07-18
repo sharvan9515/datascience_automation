@@ -31,10 +31,16 @@ class Agent(BaseAgent):
 
         schema = {col: str(state.df[col].dtype) for col in state.df.columns}
 
+        feature_descriptions = [
+            f"{name} = {state.feature_formulas.get(name, '')}"
+            for name in state.features
+        ]
+
         base_prompt = (
             "You are a pandas expert. Given a DataFrame `df` with columns "
             f"{json.dumps(schema)}, implement the following new features: "
-            f"{state.features}. Return JSON with 'code' (Python code modifying df in"
+            f"{'; '.join(feature_descriptions)}. Avoid chained assignments and use df.loc for setting values. "
+            "Return JSON with 'code' (Python code modifying df in"
             " place) and 'logs' (one message per feature describing the action)."
         )
 

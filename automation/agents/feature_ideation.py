@@ -52,6 +52,7 @@ class Agent(BaseAgent):
                 continue
             state.features.append(name)
             state.known_features.add(name)
+            state.feature_formulas[name] = formula
             state.feature_ideas.append({"name": name, "formula": formula, "rationale": rationale})
             state.append_log(
                 f"FeatureIdeation: propose {name} = {formula} because {rationale}"

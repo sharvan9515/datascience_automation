@@ -41,7 +41,7 @@ def compute_score(df: pd.DataFrame, target: str, task_type: str) -> float:
         X, y, test_size=0.2, random_state=42
     )
     if task_type == "classification":
-        model = LogisticRegression(max_iter=200)
+        model = LogisticRegression(max_iter=500)
         model.fit(X_train, y_train)
         preds = model.predict(X_test)
         return f1_score(y_test, preds, average="weighted")
@@ -70,7 +70,7 @@ class Agent(BaseAgent):
         )
 
         if state.task_type == "classification":
-            model = LogisticRegression(max_iter=200)
+            model = LogisticRegression(max_iter=500)
             model.fit(X_train, y_train)
             preds = model.predict(X_test)
 

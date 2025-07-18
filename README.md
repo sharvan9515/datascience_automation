@@ -48,13 +48,13 @@ built‑in heuristics.
    When provided the orchestrator consults the OpenAI API for smarter decisions;
    otherwise it raises an error. After completion you will find:
 
-   - `pipeline.py` – assembled code for the final pipeline
+   - `finalcode.py` – assembled code for the final pipeline
    - `output/` – directory containing logs, iteration history and a short report
 
-   The generated `pipeline.py` can be run standalone on the CSV using:
+   The generated `finalcode.py` can be run standalone on the CSV using:
 
    ```bash
-   python pipeline.py iris.csv target
+   python finalcode.py iris.csv target
    ```
 
 The script prints log entries from every agent step.  Example output:
