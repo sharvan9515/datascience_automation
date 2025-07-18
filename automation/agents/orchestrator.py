@@ -129,16 +129,52 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
                 exec(snippet, env, local_vars)
             except Exception as exc:  # noqa: BLE001
                 state.append_log(f"{stage} snippet failed: {exc}")
-                state.snippet_history.append(
-                    {
-                        "iteration": state.iteration,
-                        "stage": stage,
-                        "snippet": snippet,
-                        "accepted": False,
-                        "score": None,
-                    }
-                )
-                continue
+                retry_code = None
+                if stage == "feature_implementation":
+                    feat_desc = "; ".join(
+                        f"{name} = {state.feature_formulas.get(name, '')}"
+                        for name in state.features
+                    )
+                    prompt = (
+                        "The previous code for implementing features failed with "
+                        f"error: {exc}. The intended features are: {feat_desc}. "
+                        "Provide corrected pandas code in JSON with key 'code'."
+                    )
+                    try:
+                        llm_raw = _query_llm(prompt)
+                        parsed = json.loads(llm_raw)
+                        retry_code = parsed.get("code")
+                    except Exception as e:  # noqa: BLE001
+                        state.append_log(f"FeatureImplementation retry LLM failed: {e}")
+
+                if retry_code:
+                    try:
+                        exec(retry_code, env, local_vars)
+                        state.append_log("FeatureImplementation retry succeeded")
+                        snippet = retry_code
+                    except Exception as exc2:  # noqa: BLE001
+                        state.append_log(f"FeatureImplementation retry failed: {exc2}")
+                        state.snippet_history.append(
+                            {
+                                "iteration": state.iteration,
+                                "stage": stage,
+                                "snippet": retry_code,
+                                "accepted": False,
+                                "score": None,
+                            }
+                        )
+                        continue
+                else:
+                    state.snippet_history.append(
+                        {
+                            "iteration": state.iteration,
+                            "stage": stage,
+                            "snippet": snippet,
+                            "accepted": False,
+                            "score": None,
+                        }
+                    )
+                    continue
 
             trial_df = local_vars.get("df", trial_df)
             try:

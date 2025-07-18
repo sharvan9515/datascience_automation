@@ -75,6 +75,9 @@ class Agent(BaseAgent):
         if model_cls is None:
             raise RuntimeError(f"Unsupported model suggested by LLM: {model_name}")
 
+        if model_cls is LogisticRegression:
+            params.setdefault("max_iter", 500)
+
         state.append_log(
             f"ModelTraining: selected {model_cls.__name__} with params {params}"
         )

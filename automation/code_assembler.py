@@ -60,7 +60,7 @@ def run(state: PipelineState) -> PipelineState:
         "    main()",
     ])
 
-    with open("pipeline.py", "w") as f:
+    with open("finalcode.py", "w") as f:
         f.write("\n".join(lines))
 
     with open("output/logs.json", "w") as f:
