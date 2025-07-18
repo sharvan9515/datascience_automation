@@ -21,22 +21,58 @@ class Agent(BaseAgent):
         feature_cols = [c for c in state.df.columns if c != state.target]
         existing = sorted(set(feature_cols) | state.known_features)
 
+        # Dynamically build few-shot example from state
+        if state.feature_ideas:
+            example_existing = [f["name"] for f in state.feature_ideas if "name" in f]
+            example_prompt = (
+                "You are a creative feature engineering assistant. "
+                f"Existing features: {example_existing}. "
+                "Propose up to 3 new features that could improve model performance. "
+                "Return JSON list where each item has keys 'name', 'formula', and 'rationale'."
+            )
+            example_response = json.dumps(state.feature_ideas, indent=2)
+        else:
+            example_existing = [c for c in state.df.columns if c != state.target]
+            example_prompt = (
+                "You are a creative feature engineering assistant. "
+                f"Existing features: {example_existing}. "
+                "Propose up to 3 new features that could improve model performance. "
+                "Return JSON list where each item has keys 'name', 'formula', and 'rationale'."
+            )
+            example_response = json.dumps([
+                {"name": "Feature1", "formula": "...", "rationale": "..."}
+            ], indent=2)
+        # Main prompt for the current dataset
         prompt = (
-            "You are a feature engineering assistant. "
+            "You are a creative feature engineering assistant. "
             f"The current task type is {state.task_type}. "
             f"Existing features are: {existing}. "
             "Propose up to 3 new features that could improve model performance. "
-            "Return JSON list where each item has keys 'name', 'formula', and 'rationale'."
+            "Be creative: consider feature interactions (e.g., Age * Pclass), polynomial features, group-based statistics (e.g., mean survival rate by Title), rare category handling, and feature combinations. "
+            "Return your answer as a JSON list where each item has keys 'name', 'formula', and 'rationale'."
         )
-
-        llm_raw = _query_llm(prompt)
+        combined_prompt = (
+            example_prompt + '\n' + example_response + '\n' + prompt
+        )
+        llm_raw = _query_llm(combined_prompt)
         try:
             proposals = json.loads(llm_raw)
-        except json.JSONDecodeError as exc:
-            raise RuntimeError(f"Failed to parse LLM response: {exc}") from exc
-
+        except Exception as exc:
+            state.append_log(f"FeatureIdeation: LLM response JSON parse failed: {exc}. Raw response: {llm_raw}")
+            # Retry with a simpler prompt
+            simple_prompt = (
+                f"Given a pandas DataFrame with columns {existing}, propose up to 3 new features as a JSON list with keys 'name', 'formula', and 'rationale'."
+            )
+            llm_raw_simple = _query_llm(simple_prompt)
+            try:
+                proposals = json.loads(llm_raw_simple)
+            except Exception as exc2:
+                state.append_log(f"FeatureIdeation: LLM simple prompt JSON parse failed: {exc2}. Raw response: {llm_raw_simple}")
+                raise RuntimeError(f"LLM did not return any feature proposals. Last response: {llm_raw_simple}")
         if isinstance(proposals, dict):
             proposals = proposals.get("features", [])
+        if not isinstance(proposals, list) or not proposals:
+            raise RuntimeError(f"LLM did not return any feature proposals. Last response: {llm_raw_simple if 'llm_raw_simple' in locals() else llm_raw}")
 
         if not isinstance(proposals, list) or not proposals:
             raise RuntimeError("LLM did not return any feature proposals")

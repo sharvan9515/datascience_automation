@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-import argparse
+import re
 
 from automation.pipeline_state import PipelineState
 
@@ -19,46 +19,62 @@ ORDER = [
 
 __all__ = ["run"]
 
+# Map of keywords to their import statements
+IMPORT_MAP = {
+    'train_test_split': 'from sklearn.model_selection import train_test_split',
+    'GridSearchCV': 'from sklearn.model_selection import GridSearchCV',
+    'PCA': 'from sklearn.decomposition import PCA',
+    'LogisticRegression': 'from sklearn.linear_model import LogisticRegression',
+    'LinearRegression': 'from sklearn.linear_model import LinearRegression',
+    'RandomForestClassifier': 'from sklearn.ensemble import RandomForestClassifier',
+    'RandomForestRegressor': 'from sklearn.ensemble import RandomForestRegressor',
+    'SVC': 'from sklearn.svm import SVC',
+    'SVR': 'from sklearn.svm import SVR',
+    'pd': 'import pandas as pd',
+    'os': 'import os',
+}
+
+# Always needed for the pipeline
+ALWAYS_IMPORTS = ['import os', 'import pandas as pd']
 
 def run(state: PipelineState) -> PipelineState:
-    """Assemble the generated code blocks and persist pipeline artifacts."""
+    """Assemble only the dynamically generated and validated code blocks and persist pipeline artifacts."""
     state.append_log("Code assembler supervisor: assembling pipeline")
 
     os.makedirs("output", exist_ok=True)
     os.makedirs("artifacts", exist_ok=True)
 
-    lines: list[str] = [
-        "import argparse",
-        "import os",
-        "import pandas as pd",
-        "from sklearn.model_selection import train_test_split, GridSearchCV",
-        "from sklearn.decomposition import PCA",
-        "from sklearn.linear_model import LogisticRegression, LinearRegression",
-        "from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor",
-        "from sklearn.svm import SVC, SVR",
-        "import joblib",
-        "",
-        "def main(args: list[str] | None = None) -> None:",
-        "    parser = argparse.ArgumentParser(description='Run assembled pipeline')",
-        "    parser.add_argument('csv', help='Path to CSV file')",
-        "    parser.add_argument('target', help='Target column name')",
-        "    parser.add_argument('--max-iter', type=int, default=10, help='Maximum iterations')",
-        "    parser.add_argument('--patience', type=int, default=5, help='Rounds without improvement')",
-        "    parsed = parser.parse_args(args)",
-        "    df = pd.read_csv(parsed.csv)",
-        "    target = parsed.target",
-    ]
-
+    # Collect all code lines from accepted code blocks
+    code_lines = []
     for stage in ORDER:
         for snippet in state.code_blocks.get(stage, []):
             for line in snippet.splitlines():
-                lines.append(f'    {line}')
+                if 'joblib.dump' in line:
+                    continue  # Remove model saving lines
+                code_lines.append(line)
 
-    lines.extend([
-        "",
-        "if __name__ == '__main__':",
-        "    main()",
-    ])
+    # Find which imports are needed
+    used_imports = set(ALWAYS_IMPORTS)
+    code_str = '\n'.join(code_lines)
+    for keyword, import_stmt in IMPORT_MAP.items():
+        # Use regex to match whole words only
+        if re.search(rf'\b{keyword}\b', code_str):
+            used_imports.add(import_stmt)
+
+    # Remove duplicates and sort
+    import_lines = sorted(used_imports)
+
+    # Main function definition (no argparse, notebook/colab style)
+    lines: list[str] = []
+    lines.extend(import_lines)
+    lines.append("")
+    lines.append("# Set your dataset path and target column here")
+    lines.append("csv_path = 'your_data.csv'  # TODO: set your CSV file path")
+    lines.append("target = 'your_target_column'  # TODO: set your target column name")
+    lines.append("df = pd.read_csv(csv_path)")
+    lines.append("")
+    for line in code_lines:
+        lines.append(line)
 
     with open("finalcode.py", "w") as f:
         f.write("\n".join(lines))

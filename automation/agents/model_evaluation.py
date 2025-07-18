@@ -56,7 +56,7 @@ class Agent(BaseAgent):
     """Model evaluation agent."""
 
     def run(self, state: PipelineState) -> PipelineState:
-        """Train a quick model, analyze metrics, and consult the LLM for advice."""
+        """Train a quick model, analyze metrics, and update state with hardcoded logic only."""
         state.append_log("Evaluator supervisor: starting")
 
         df = state.df
@@ -98,27 +98,6 @@ class Agent(BaseAgent):
             state.append_log(f"ModelEvaluation metrics: {metrics_str}")
             new_score = r2
 
-    # Ask the LLM for refinement suggestions
-        prompt = (
-            "Given these evaluation metrics, suggest ways to improve the model. "
-            "Mention new features, transformations, or model adjustments. "
-            "Should we iterate further? Respond in JSON with keys 'iterate', 'reason',"
-            " and 'suggestions'.\n"
-            f"Metrics: {metrics_str}"
-        )
-
-        llm_raw = _query_llm(prompt)
-        try:
-            parsed = json.loads(llm_raw)
-        except Exception as exc:  # noqa: BLE001
-            raise RuntimeError(f"Failed to parse LLM response: {exc}") from exc
-
-        if not isinstance(parsed, dict):
-            raise RuntimeError("LLM response must be a JSON object")
-
-        reason = parsed.get("reason", "")
-        suggestions = parsed.get("suggestions", "")
-
         prev_best = state.best_score
         tol = 0.01
         improved = prev_best is None or new_score > prev_best + tol
@@ -133,10 +112,8 @@ class Agent(BaseAgent):
             or state.iteration >= state.max_iter
         )
 
-        log_msg = f"ModelEvaluation decision: iterate={state.iterate} - {reason}".strip()
+        log_msg = f"ModelEvaluation decision: iterate={state.iterate} (hardcoded logic)"
         state.append_log(log_msg)
-        if suggestions:
-            state.append_log(f"ModelEvaluation suggestions: {suggestions}")
 
         state.iteration_history.append(
             {

@@ -8,7 +8,7 @@ from .base import BaseAgent
 def _query_llm(prompt: str) -> str:
     """Wrapper around :func:`query_llm` with no examples."""
 
-    return query_llm(prompt, expect_json=True)
+    return query_llm(prompt)
 
 
 class Agent(BaseAgent):

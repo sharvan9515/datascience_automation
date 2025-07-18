@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from automation.pipeline_state import PipelineState
 from ..prompt_utils import query_llm
@@ -14,6 +15,32 @@ def _query_llm(prompt: str) -> str:
     """Wrapper around :func:`query_llm` with no examples."""
 
     return query_llm(prompt, expect_json=True)
+
+
+def inject_missing_imports(code: str) -> str:
+    # Add imports for common libraries if used in code
+    imports = []
+    if re.search(r'\bre\.', code) and 'import re' not in code:
+        imports.append('import re')
+    if re.search(r'\bnp\.', code) and 'import numpy as np' not in code:
+        imports.append('import numpy as np')
+    if re.search(r'\bpd\.', code) and 'import pandas as pd' not in code:
+        imports.append('import pandas as pd')
+    if re.search(r'\bsklearn\.', code) and 'import sklearn' not in code:
+        imports.append('import sklearn')
+    if re.search(r'\bLabelEncoder\b', code) and 'from sklearn.preprocessing import LabelEncoder' not in code:
+        imports.append('from sklearn.preprocessing import LabelEncoder')
+    if re.search(r'\bOneHotEncoder\b', code) and 'from sklearn.preprocessing import OneHotEncoder' not in code:
+        imports.append('from sklearn.preprocessing import OneHotEncoder')
+    if re.search(r'\bSimpleImputer\b', code) and 'from sklearn.impute import SimpleImputer' not in code:
+        imports.append('from sklearn.impute import SimpleImputer')
+    if re.search(r'\bXGBClassifier\b', code) and 'from xgboost import XGBClassifier' not in code:
+        imports.append('from xgboost import XGBClassifier')
+    if re.search(r'\bXGBRegressor\b', code) and 'from xgboost import XGBRegressor' not in code:
+        imports.append('from xgboost import XGBRegressor')
+    if imports:
+        code = '\n'.join(imports) + '\n' + code
+    return code
 
 
 class Agent(BaseAgent):
@@ -54,10 +81,44 @@ class Agent(BaseAgent):
             raise RuntimeError("LLM response missing 'code'")
 
         code = parsed.get("code", "")
+        if not isinstance(code, str):
+            code = str(code)
         logs = parsed.get("logs", [])
-        for msg in logs or []:
+        if not isinstance(logs, list):
+            logs = [str(logs)]
+        for msg in logs:
             state.append_log(f"FeatureImplementation: {msg}")
 
+        # Auto-import and error handling for LLM code
+        code = inject_missing_imports(code)
+        try:
+            local_vars = {'df': state.df.copy(), 'target': state.target}
+            exec(code, {}, local_vars)
+        except Exception as e:
+            state.append_log(f"FeatureImplementation: LLM code failed with error: {e}")
+            # Retry: prompt LLM for a fix
+            fix_prompt = (
+                f"The previous code for implementing features failed with error: {e}. "
+                f"Here is the code that failed:\n{code}\n"
+                "Please provide corrected Python code for the same feature implementation as a JSON object with a single key 'code'."
+            )
+            fixed_code_json = _query_llm(fix_prompt)
+            try:
+                parsed = json.loads(fixed_code_json)
+                fixed_code = parsed.get("code", "")
+                if not isinstance(fixed_code, str):
+                    fixed_code = str(fixed_code)
+            except Exception as e_json:
+                state.append_log(f"FeatureImplementation: LLM code retry JSON parse failed: {e_json}. Raw response: {fixed_code_json}")
+                raise RuntimeError(f"LLM did not return valid code for feature implementation. Last response: {fixed_code_json}")
+            fixed_code = inject_missing_imports(fixed_code)
+            try:
+                exec(fixed_code, {}, local_vars)
+                state.append_log("FeatureImplementation: LLM code retry succeeded.")
+                code = fixed_code
+            except Exception as e2:
+                state.append_log(f"FeatureImplementation: LLM code retry failed with error: {e2}")
+                raise RuntimeError(f"LLM code retry failed with error: {e2}")
         state.append_pending_code(stage_name, code)
         return state
 
