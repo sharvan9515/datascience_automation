@@ -78,6 +78,14 @@ class Agent(BaseAgent):
             # Nothing to implement
             return state
 
+        # Ensure all non-numeric columns are encoded as numeric before feature engineering
+        for col in state.df.columns:
+            if col == state.target:
+                continue
+            if not pd.api.types.is_numeric_dtype(state.df[col]):
+                state.df[col] = state.df[col].astype('category').cat.codes
+                state.append_log(f"FeatureImplementation: Encoded non-numeric column '{col}' as category codes before feature engineering.")
+
         schema = {col: str(state.df[col].dtype) for col in state.df.columns}
 
         feature_descriptions = [
@@ -88,9 +96,10 @@ class Agent(BaseAgent):
         base_prompt = (
             "You are a pandas expert. Given a DataFrame `df` with columns "
             f"{json.dumps(schema)}, implement the following new features: "
-            f"{'; '.join(feature_descriptions)}. Avoid chained assignments and use df.loc for setting values. "
-            "Return JSON with 'code' (Python code modifying df in"
-            " place) and 'logs' (one message per feature describing the action)."
+            f"{'; '.join(feature_descriptions)}. "
+            "Assume all categorical columns are already encoded as numeric. Only use numeric columns in formulas. "
+            "Avoid chained assignments and use df.loc for setting values. "
+            "Return JSON with 'code' (Python code modifying df in place) and 'logs' (one message per feature describing the action)."
         )
 
         llm_resp = _query_llm(base_prompt)

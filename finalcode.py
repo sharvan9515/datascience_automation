@@ -9,6 +9,12 @@ csv_path = 'your_data.csv'  # TODO: set your CSV file path
 target = 'your_target_column'  # TODO: set your target column name
 df = pd.read_csv(csv_path)
 
+df['Age'] = df['Age'].fillna(df['Age'].mean())
+df['Sex'] = df['Sex'].astype('category').cat.codes
+df = pd.get_dummies(df, columns=['Embarked'])
+import re
+df['Age_x_Fare'] = df['Age'] * df['Fare']
+df['Age_x_Fare_x_Pclass'] = df['Age'] * df['Fare'] * df['Pclass']
 X = df.drop(columns=['Survived'])
 y = df['Survived']
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)

@@ -28,6 +28,9 @@ class PipelineState:
     iteration: int = 0
     max_iter: int = 0
 
+    # List of columns that must not be dropped in preprocessing (set by feature selection agent)
+    must_keep: list[str] = field(default_factory=list)
+
     # Track all trained models for ensembling
     trained_models: list = field(default_factory=list)
 

@@ -80,6 +80,12 @@ class Agent(BaseAgent):
                     f"FeatureSelection: dropped {feat} ({delta:+.4f} score)"
                 )
 
+        # Update must_keep in state to only those features that improved score
+        if hasattr(state, 'must_keep'):
+            state.must_keep = [state.target] + kept_features
+        else:
+            setattr(state, 'must_keep', [state.target] + kept_features)
+
         snippet = f"df = df[['{state.target}'] + {kept_features!r}]"
         state.append_pending_code(stage_name, snippet)
 
