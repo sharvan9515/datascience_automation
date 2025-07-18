@@ -21,7 +21,7 @@ class Agent(BaseAgent):
         feature_cols = [c for c in state.df.columns if c != state.target]
         existing = sorted(set(feature_cols) | state.known_features)
 
-        # Dynamically build few-shot example from state
+        # Dynamically build few-shot example from state or synthesize one
         if state.feature_ideas:
             example_existing = [f["name"] for f in state.feature_ideas if "name" in f]
             example_prompt = (
@@ -32,23 +32,36 @@ class Agent(BaseAgent):
             )
             example_response = json.dumps(state.feature_ideas, indent=2)
         else:
-            example_existing = [c for c in state.df.columns if c != state.target]
+            # Synthesize a realistic example based on current columns
+            synth_features = [c for c in state.df.columns if c != state.target][:2]
+            synth_example = [
+                {
+                    "name": f"{synth_features[0]}_squared" if len(synth_features) > 0 else "Feature1",
+                    "formula": f"{synth_features[0]} ** 2" if len(synth_features) > 0 else "...",
+                    "rationale": f"Square of {synth_features[0]} may capture nonlinearity" if len(synth_features) > 0 else "..."
+                },
+                {
+                    "name": f"{synth_features[0]}_x_{synth_features[1]}" if len(synth_features) > 1 else "Feature2",
+                    "formula": f"{synth_features[0]} * {synth_features[1]}" if len(synth_features) > 1 else "...",
+                    "rationale": f"Interaction between {synth_features[0]} and {synth_features[1]}" if len(synth_features) > 1 else "..."
+                }
+            ]
+            example_existing = synth_features
             example_prompt = (
                 "You are a creative feature engineering assistant. "
                 f"Existing features: {example_existing}. "
                 "Propose up to 3 new features that could improve model performance. "
                 "Return JSON list where each item has keys 'name', 'formula', and 'rationale'."
             )
-            example_response = json.dumps([
-                {"name": "Feature1", "formula": "...", "rationale": "..."}
-            ], indent=2)
+            example_response = json.dumps(synth_example, indent=2)
         # Main prompt for the current dataset
         prompt = (
             "You are a creative feature engineering assistant. "
             f"The current task type is {state.task_type}. "
             f"Existing features are: {existing}. "
             "Propose up to 3 new features that could improve model performance. "
-            "Be creative: consider feature interactions (e.g., Age * Pclass), polynomial features, group-based statistics (e.g., mean survival rate by Title), rare category handling, and feature combinations. "
+            "Be creative: consider feature interactions (e.g., A * B), polynomial features (e.g., A ** 2), group-based statistics (e.g., mean(target) by C), rare category handling (e.g., is_rare_category), and combinations of categorical and numeric features. "
+            "Avoid duplicating existing features. "
             "Return your answer as a JSON list where each item has keys 'name', 'formula', and 'rationale'."
         )
         combined_prompt = (
@@ -77,9 +90,6 @@ class Agent(BaseAgent):
                 proposals = proposals.get("features", [])
         if not isinstance(proposals, list) or not proposals:
             raise RuntimeError(f"LLM did not return any feature proposals. Last response: {llm_raw_simple if 'llm_raw_simple' in locals() else llm_raw}")
-
-        if not isinstance(proposals, list) or not proposals:
-            raise RuntimeError("LLM did not return any feature proposals")
 
         for prop in proposals:
             name = prop.get("name")

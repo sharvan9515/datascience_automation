@@ -32,33 +32,45 @@ def inject_missing_imports(code: str) -> str:
 class EnsembleAgent(BaseAgent):
     """Agentic ensembling: combine predictions from multiple models."""
     def run(self, state: PipelineState) -> PipelineState:
-        state.append_log("EnsembleAgent: proposing ensemble model via LLM.")
-        # For now, just mention the models used so far (could be tracked in state)
-        prompt = (
-            "Given trained models (e.g., RandomForest, XGBoost, LogisticRegression) and their predictions, "
-            "generate Python code to combine their predictions using majority voting (for classification) or averaging (for regression). "
-            "Evaluate the ensemble using the best metric for the task. "
-            "Assume you have X_train, X_test, y_train, y_test, and trained models named model1, model2, model3. "
-            "Return your answer as a JSON object with a single key code containing the Python code as a string."
-        )
-        llm_code_json = query_llm(prompt)
-        try:
-            parsed = json.loads(llm_code_json)
-            llm_code = parsed.get("code", "")
-            if not isinstance(llm_code, str):
-                llm_code = str(llm_code)
-        except Exception as e_json:
-            state.append_log(f"EnsembleAgent: LLM code JSON parse failed: {e_json}. Raw response: {llm_code_json}")
-            raise RuntimeError(f"LLM did not return valid code for ensemble agent. Last response: {llm_code_json}")
-        state.append_log("EnsembleAgent: LLM-generated code:\n" + llm_code)
-        llm_code = inject_missing_imports(llm_code)
-        local_vars = {}
-        try:
-            exec(llm_code, {}, local_vars)
-            state.append_log("EnsembleAgent: ensemble code executed successfully.")
-        except Exception as e:
-            state.append_log(f"EnsembleAgent: ensemble code failed with error: {e}")
-        # Optionally, update state with ensemble results if improved
+        state.append_log("EnsembleAgent: building ensemble from tracked models.")
+        trained_models = state.get_trained_models()
+        if len(trained_models) < 2:
+            state.append_log("EnsembleAgent: Not enough models for ensembling. Skipping.")
+            return state
+        import numpy as np
+        from sklearn.ensemble import VotingClassifier, VotingRegressor
+        from sklearn.metrics import accuracy_score, r2_score
+        # Prepare data
+        df = state.df
+        X = df.drop(columns=[state.target]).copy()
+        y = df[state.target]
+        X = X.fillna(0)
+        # Build ensemble
+        estimators = [(m['name'], m['model']) for m in trained_models]
+        if state.task_type == 'classification':
+            ensemble = VotingClassifier(estimators=estimators, voting='soft' if hasattr(estimators[0][1], 'predict_proba') else 'hard')
+            try:
+                ensemble.fit(X, y)
+                preds = ensemble.predict(X)
+                score = accuracy_score(y, preds)
+                state.append_log(f"EnsembleAgent: VotingClassifier accuracy={score:.4f}")
+            except Exception as e:
+                state.append_log(f"EnsembleAgent: VotingClassifier failed: {e}")
+                return state
+        else:
+            ensemble = VotingRegressor(estimators=estimators)
+            try:
+                ensemble.fit(X, y)
+                preds = ensemble.predict(X)
+                score = r2_score(y, preds)
+                state.append_log(f"EnsembleAgent: VotingRegressor r2={score:.4f}")
+            except Exception as e:
+                state.append_log(f"EnsembleAgent: VotingRegressor failed: {e}")
+                return state
+        # Update best score if improved
+        if state.best_score is None or score > state.best_score:
+            state.best_score = score
+            state.append_log("EnsembleAgent: Ensemble improved the best score.")
         return state
 
 def run(state: PipelineState) -> PipelineState:

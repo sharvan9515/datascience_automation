@@ -28,6 +28,9 @@ class PipelineState:
     iteration: int = 0
     max_iter: int = 0
 
+    # Track all trained models for ensembling
+    trained_models: list = field(default_factory=list)
+
     def append_log(self, message: str) -> None:
         """Append a human-readable message to the pipeline log."""
         self.log.append(str(message))
@@ -39,3 +42,17 @@ class PipelineState:
     def append_pending_code(self, stage: str, code: str) -> None:
         """Store code snippets awaiting validation or execution."""
         self.pending_code.setdefault(stage, []).append(code)
+
+    def add_trained_model(self, model, name, model_type, predictions=None, score=None):
+        """Add a trained model and its metadata for ensembling."""
+        self.trained_models.append({
+            'model': model,
+            'name': name,
+            'type': model_type,
+            'predictions': predictions,
+            'score': score
+        })
+
+    def get_trained_models(self):
+        """Return all trained models and their metadata."""
+        return self.trained_models

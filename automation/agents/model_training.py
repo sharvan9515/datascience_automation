@@ -14,6 +14,12 @@ from sklearn.metrics import accuracy_score, r2_score
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.svm import SVC, SVR
+from xgboost import XGBClassifier, XGBRegressor
+try:
+    from lightgbm import LGBMClassifier, LGBMRegressor
+    HAS_LGBM = True
+except ImportError:
+    HAS_LGBM = False
 
 
 def _query_llm(prompt: str) -> str:
@@ -29,7 +35,12 @@ MODEL_MAP = {
     "randomforestregressor": RandomForestRegressor,
     "svc": SVC,
     "svr": SVR,
+    "xgbclassifier": XGBClassifier,
+    "xgbregressor": XGBRegressor,
 }
+if HAS_LGBM:
+    MODEL_MAP["lgbmclassifier"] = LGBMClassifier
+    MODEL_MAP["lgbmregressor"] = LGBMRegressor
 
 
 def _normalize(name: str) -> str:
@@ -56,7 +67,7 @@ class Agent(BaseAgent):
 
     # Ask the LLM for an appropriate algorithm and params
         prompt = (
-            "Select an appropriate scikit-learn model and basic hyperparameters "
+            "Select an appropriate model (choose from: LogisticRegression, RandomForestClassifier, SVC, XGBClassifier, LGBMClassifier for classification; LinearRegression, RandomForestRegressor, SVR, XGBRegressor, LGBMRegressor for regression) and basic hyperparameters "
             f"for a {state.task_type} task with {len(df)} samples and "
             f"{X.shape[1]} features. Respond in JSON with keys 'model' and 'params'."
         )
@@ -107,6 +118,16 @@ class Agent(BaseAgent):
             "joblib.dump(model, 'artifacts/model.pkl')"
         )
         state.append_code(stage_name, code_snippet)
+
+        # Track the trained model for ensembling
+        y_pred = model.predict(X_test)
+        state.add_trained_model(
+            model=model,
+            name=model_cls.__name__,
+            model_type=state.task_type,
+            predictions=y_pred,
+            score=score if 'score' in locals() else None
+        )
 
         return state
 

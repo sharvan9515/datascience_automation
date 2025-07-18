@@ -48,6 +48,15 @@ class Agent(BaseAgent):
             state.current_score = search.best_score_
 
         joblib.dump(search.best_estimator_, "artifacts/model.pkl")
+        # Track the best estimator for ensembling
+        y_pred = search.best_estimator_.predict(X_test)
+        state.add_trained_model(
+            model=search.best_estimator_,
+            name=search.best_estimator_.__class__.__name__,
+            model_type=state.task_type,
+            predictions=y_pred,
+            score=search.best_score_
+        )
         code_snippet = (
             f"param_grid = {param_grid}\n"
             f"search = GridSearchCV({model.__class__.__name__}(random_state=42), param_grid, cv=3, scoring='{scoring}')\n"

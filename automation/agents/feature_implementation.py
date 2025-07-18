@@ -49,6 +49,22 @@ def inject_missing_imports(code: str) -> str:
     return code
 
 
+def ensure_numeric_features(df, target, state=None):
+    for col in df.columns:
+        if col == target:
+            continue
+        if not pd.api.types.is_numeric_dtype(df[col]):
+            if state:
+                state.append_log(f"FeatureImplementation: Encoding non-numeric column '{col}' as categorical codes.")
+            df[col] = df[col].astype('category').cat.codes
+        if df[col].isnull().any():
+            fill_value = df[col].mean() if pd.api.types.is_numeric_dtype(df[col]) else df[col].mode()[0]
+            if state:
+                state.append_log(f"FeatureImplementation: Filling missing values in column '{col}' with {fill_value}.")
+            df[col] = df[col].fillna(fill_value)
+    return df
+
+
 class Agent(BaseAgent):
     """Feature implementation agent."""
 
@@ -110,6 +126,8 @@ class Agent(BaseAgent):
         try:
             local_vars = {'df': state.df.copy(), 'target': state.target}
             exec(code, exec_globals, local_vars)
+            # Ensure all features are numeric and have no missing values
+            local_vars['df'] = ensure_numeric_features(local_vars['df'], state.target, state)
         except Exception as e:
             state.append_log(f"FeatureImplementation: LLM code failed with error: {e}")
             # Retry: prompt LLM for a fix
@@ -130,6 +148,8 @@ class Agent(BaseAgent):
                 raise RuntimeError(f"LLM did not return valid code for feature implementation. Last response: {fixed_code_json}")
             try:
                 exec(fixed_code, exec_globals, local_vars)
+                # Ensure all features are numeric and have no missing values
+                local_vars['df'] = ensure_numeric_features(local_vars['df'], state.target, state)
                 state.append_log("FeatureImplementation: LLM code retry succeeded.")
                 code = fixed_code
             except Exception as e2:
