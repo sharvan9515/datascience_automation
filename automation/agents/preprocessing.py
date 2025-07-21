@@ -77,7 +77,15 @@ class Agent(BaseAgent):
         try:
             parsed = json.loads(llm_resp)
         except json.JSONDecodeError as exc:
-            raise RuntimeError(f"Failed to parse LLM response: {exc}") from exc
+            state.append_log(f"Preprocessing: Failed to parse LLM response: {exc}. Raw response: {llm_resp}")
+            # Try to auto-correct common JSON issues (single to double quotes)
+            fixed_resp = llm_resp.replace("'", '"')
+            try:
+                parsed = json.loads(fixed_resp)
+                state.append_log("Preprocessing: Successfully parsed LLM response after auto-correction.")
+            except Exception as exc2:
+                state.append_log(f"Preprocessing: Still failed to parse LLM response after auto-correction: {exc2}. Skipping this step.")
+                return state
 
         if 'code' not in parsed:
             raise RuntimeError("LLM response missing 'code' field")

@@ -7,6 +7,7 @@ from ..prompt_utils import query_llm
 from . import model_evaluation
 from .base import BaseAgent
 from concurrent.futures import ThreadPoolExecutor
+import sklearn.model_selection
 
 
 def _query_llm(prompt: str) -> str:
@@ -31,54 +32,56 @@ class Agent(BaseAgent):
         # Ensure task_type is always a string
         task_type = state.task_type if state.task_type is not None else 'classification'
 
+        from sklearn.model_selection import cross_val_score
         # Baseline without proposed features
         baseline_df = df.drop(columns=new_feats, errors="ignore")
-        baseline_score = model_evaluation.compute_score(
-            baseline_df, state.target, task_type
-        )
+        baseline_X = baseline_df.drop(columns=[state.target], errors="ignore")
+        baseline_y = baseline_df[state.target]
+        baseline_X = baseline_X.fillna(0)
+        # Use cross-validation for baseline score
+        if task_type == "classification":
+            from sklearn.ensemble import RandomForestClassifier
+            baseline_model = RandomForestClassifier(n_estimators=10, random_state=42)
+            baseline_score = cross_val_score(baseline_model, baseline_X, baseline_y, cv=3, scoring="accuracy").mean()
+        else:
+            from sklearn.ensemble import RandomForestRegressor
+            baseline_model = RandomForestRegressor(n_estimators=10, random_state=42)
+            baseline_score = cross_val_score(baseline_model, baseline_X, baseline_y, cv=3, scoring="r2").mean()
         state.append_log(
-            f"FeatureSelection: baseline score={baseline_score:.4f}"
+            f"FeatureSelection: baseline CV score={baseline_score:.4f}"
         )
 
         current_df = baseline_df
         current_score = baseline_score
+        # Evaluate features in sets for synergy
         kept_features: list[str] = []
-
-        results = []
-        def evaluate_feature(feat):
-            trial_df = current_df.join(df[[feat]])
-            trial_score = model_evaluation.compute_score(
-                trial_df, state.target, task_type
-            )
-            return feat, trial_df, trial_score
-
-        # Parallelize feature evaluation
-        with ThreadPoolExecutor() as executor:
-            results = list(executor.map(evaluate_feature, new_feats))
-
-        for feat, trial_df, trial_score in results:
+        feature_sets = []
+        for i, feat in enumerate(new_feats):
+            # Try adding each feature to the current set
+            trial_set = kept_features + [feat]
+            trial_df = df[trial_set + [state.target]].copy()
+            trial_X = trial_df.drop(columns=[state.target], errors="ignore")
+            trial_y = trial_df[state.target]
+            trial_X = trial_X.fillna(0)
+            if task_type == "classification":
+                model = RandomForestClassifier(n_estimators=10, random_state=42)
+                trial_score = cross_val_score(model, trial_X, trial_y, cv=3, scoring="accuracy").mean()
+            else:
+                model = RandomForestRegressor(n_estimators=10, random_state=42)
+                trial_score = cross_val_score(model, trial_X, trial_y, cv=3, scoring="r2").mean()
             delta = trial_score - current_score
-            prompt = (
-                f"Baseline score {current_score:.4f}. "
-                f"After adding feature '{feat}', score {trial_score:.4f}. "
-                "Should we keep this feature? Reply yes or no."
-            )
-            llm_decision = _query_llm(prompt)
-            if not llm_decision:
-                raise RuntimeError("LLM failed to return feature selection decision")
-            keep = llm_decision.strip().lower().startswith("y")
-
-            if keep:
+            # Accept the set if the score is neutral or slightly negative (within delta)
+            delta_accept = -0.05
+            if delta >= delta_accept:
                 kept_features.append(feat)
                 current_df = trial_df
                 current_score = trial_score
-                state.append_log(
-                    f"FeatureSelection: kept {feat} ({delta:+.4f} score)"
-                )
+                state.append_log(f"FeatureSelection: kept set {kept_features} ({delta:+.4f} score)")
             else:
-                state.append_log(
-                    f"FeatureSelection: dropped {feat} ({delta:+.4f} score)"
-                )
+                state.append_log(f"FeatureSelection: dropped {feat} ({delta:+.4f} score)")
+        # At the end, keep the set if it improves or is neutral
+        state.features = kept_features
+        state.df = current_df
 
         # Update must_keep in state to only those features that improved score
         if hasattr(state, 'must_keep'):

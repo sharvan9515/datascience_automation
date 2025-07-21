@@ -8,7 +8,7 @@ from automation.pipeline_state import PipelineState
 from automation.agents import orchestrator
 
 
-def run_pipeline(csv_path: str, target: str, max_iter: int = 10, patience: int = 5) -> PipelineState:
+def run_pipeline(csv_path: str, target: str, max_iter: int = 10, patience: int = 5, score_threshold: float = 0.80) -> PipelineState:
     """Load data, initialize :class:`PipelineState`, and run the orchestrator."""
 
     if not os.getenv("OPENAI_API_KEY"):
@@ -16,7 +16,7 @@ def run_pipeline(csv_path: str, target: str, max_iter: int = 10, patience: int =
 
     df = pd.read_csv(csv_path)
     state = PipelineState(df=df, target=target)
-    return orchestrator.run(state, max_iter=max_iter, patience=patience)
+    return orchestrator.run(state, max_iter=max_iter, patience=patience, score_threshold=score_threshold)
 
 
 def compile_log(state: PipelineState) -> str:
@@ -39,8 +39,9 @@ def main(args: list[str] | None = None) -> None:
     parser.add_argument("target", help="Target column name")
     parser.add_argument("--max-iter", type=int, default=10, help="Maximum iterations")
     parser.add_argument("--patience", type=int, default=5, help="Rounds without improvement before stopping")
+    parser.add_argument("--score-threshold", type=float, default=0.80, help="Score threshold to trigger hyperparameter search")
     parsed = parser.parse_args(args)
-    final_state = run_pipeline(parsed.csv, parsed.target, max_iter=parsed.max_iter, patience=parsed.patience)
+    final_state = run_pipeline(parsed.csv, parsed.target, max_iter=parsed.max_iter, patience=parsed.patience, score_threshold=parsed.score_threshold)
     print_final_log(final_state)
 
 

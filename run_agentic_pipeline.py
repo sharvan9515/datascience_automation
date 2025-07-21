@@ -2,6 +2,7 @@ import sys
 import pandas as pd
 from automation.pipeline_state import PipelineState
 from automation.agents.orchestrator import run
+from automation import code_assembler
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
@@ -11,5 +12,13 @@ if __name__ == "__main__":
     target = sys.argv[2]
     df = pd.read_csv(csv_path)
     state = PipelineState(df=df, target=target)
-    state = run(state)
-    print("Agentic pipeline completed. Check logs and output for results.") 
+    try:
+        final_state = run(state)
+    finally:
+        # Always assemble code, even on error
+        code_assembler.run(state)
+    print("Agentic pipeline completed. Check logs and output for results.")
+    # Print iteration history for accuracy/score progression
+    print("\nIteration History (score progression):")
+    for entry in final_state.iteration_history:
+        print(f"Iteration {entry['iteration']}: score={entry.get('best_score', 'N/A')}, metrics={entry.get('metrics', '')}") 

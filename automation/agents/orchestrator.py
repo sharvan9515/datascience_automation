@@ -242,14 +242,18 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
                 )
                 continue
 
-            if trial_score > (state.current_score or 0.0):
-                delta = trial_score - (state.current_score or 0.0)
-                state.append_log(f"{stage}: accepted snippet (+{delta:.4f} score)")
+            # Accept features that are neutral or slightly negative (within delta)
+            delta = 0.05  # Increased from 0.01
+            new_cols = set()  # Ensure new_cols is always defined
+            if trial_score >= (state.current_score or 0.0) - delta:
+                delta_score = trial_score - (state.current_score or 0.0)
+                state.append_log(f"{stage}: accepted snippet ({'+' if delta_score >= 0 else ''}{delta_score:.4f} score, allowed by relaxed delta)")
                 if stage == "feature_implementation":
-                    # Log which features were added
                     new_cols = set(trial_df.columns) - set(state.df.columns) if hasattr(trial_df, 'columns') and hasattr(state.df, 'columns') else set()
                     if new_cols:
                         state.append_log(f"FeatureImplementation: added features {sorted(new_cols)}")
+                    # Always append accepted feature engineering code to code_blocks for assembler
+                    state.append_code(stage, snippet)
                 if trial_df is not None and isinstance(trial_df, pd.DataFrame):
                     state.df = cast(pd.DataFrame, trial_df)
                 else:
@@ -265,9 +269,15 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
                         "score": trial_score,
                     }
                 )
+                # Keep a rolling window of accepted features (for synergy)
+                rolling_features = getattr(state, 'rolling_features', [])
+                rolling_features.append(list(new_cols))
+                setattr(state, 'rolling_features', rolling_features)
+                state.append_log(f"FeatureTracker: rolling window of accepted features: {rolling_features[-5:]}")
+                state.append_log(f"FeatureTracker: accepted feature implementation in {stage} with score {trial_score:.4f}")
             else:
                 state.append_log(
-                    f"{stage}: rejected snippet ({trial_score:.4f} <= {state.current_score:.4f})"
+                    f"{stage}: rejected snippet ({trial_score:.4f} < {state.current_score:.4f} - delta)"
                 )
                 state.snippet_history.append(
                     {
@@ -278,6 +288,7 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
                         "score": trial_score,
                     }
                 )
+                state.append_log(f"FeatureTracker: rejected feature implementation in {stage} with score {trial_score:.4f}")
 
         state.pending_code[stage] = []
 
@@ -323,7 +334,7 @@ def try_model_training(df, target, task_type):
         return False
 
 
-def run(state: PipelineState, max_iter: int = 10, patience: int = 5) -> PipelineState:
+def run(state: PipelineState, max_iter: int = 10, patience: int = 5, score_threshold: float = 0.80) -> PipelineState:
     """Run the pipeline with LLM-guided orchestration and iteration."""
     state.append_log("Orchestrator supervisor: booting pipeline")
     state.best_score = None
@@ -341,16 +352,20 @@ def run(state: PipelineState, max_iter: int = 10, patience: int = 5) -> Pipeline
     state.iterate = True
     agentic_attempts = 0
     max_agentic_attempts = 3
+    min_iterations_before_stop = 30  # Minimum iterations before early stopping
     while state.iterate and state.iteration < max_iter:
         state.append_log(f"Orchestrator: starting iteration {state.iteration}")
         state = _run_decided_steps(state)
         agentic_attempts += 1
-        # After model training and evaluation, try ensembling
         prev_score = state.best_score
         state = EnsembleAgent().run(state)
-        # Optionally, check if ensemble improved the score and update state accordingly
         if state.best_score is not None and prev_score is not None and state.best_score > prev_score:
             state.append_log("EnsembleAgent: ensemble improved the score.")
+        # Safeguard: only stop if no improvement for 'patience' rounds AND min_iterations_before_stop is reached
+        if state.iteration >= min_iterations_before_stop and state.no_improve_rounds >= patience:
+            state.append_log(f"No improvement for {patience} consecutive iterations after {min_iterations_before_stop} minimum. Triggering hyperparameter search.")
+            state = HyperparameterSearchAgent().run(state)
+            break
         # Check if data is model-ready and model training works
         ready = is_model_ready(state.df, state.target)
         task_type = state.task_type if state.task_type is not None else 'classification'
@@ -362,7 +377,6 @@ def run(state: PipelineState, max_iter: int = 10, patience: int = 5) -> Pipeline
         if agentic_attempts >= max_agentic_attempts:
             state.append_log("Agentic attempts exhausted. Invoking BaselineAgent as fallback.")
             state = BaselineAgent().run(state)
-            # After BaselineAgent, check again
             ready = is_model_ready(state.df, state.target)
             trained = try_model_training(state.df, state.target, task_type)
             if ready and trained:
@@ -373,5 +387,19 @@ def run(state: PipelineState, max_iter: int = 10, patience: int = 5) -> Pipeline
                 state.append_log("BaselineAgent fallback failed. Stopping pipeline.")
                 break
         state.iteration += 1
+    # After all iterations or patience, trigger hyperparameter search if not already done
+    if state.no_improve_rounds >= patience or state.iteration >= max_iter:
+        state.append_log("Triggering hyperparameter search after all iterations.")
+        state = HyperparameterSearchAgent().run(state)
+    # Before assembling final code, log the contents of pending_code and code_blocks for debugging
+    import pprint
+    print("[DEBUG] state.pending_code['feature_implementation']:")
+    pprint.pprint(state.pending_code.get('feature_implementation', []))
+    print("[DEBUG] state.code_blocks['feature_implementation']:")
+    pprint.pprint(state.code_blocks.get('feature_implementation', []))
+    print("[DEBUG] state.pending_code['feature_selection']:")
+    pprint.pprint(state.pending_code.get('feature_selection', []))
+    print("[DEBUG] state.code_blocks['feature_selection']:")
+    pprint.pprint(state.code_blocks.get('feature_selection', []))
     state = code_assembler.run(state)
     return state

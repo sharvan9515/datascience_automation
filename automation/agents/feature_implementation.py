@@ -93,15 +93,16 @@ class Agent(BaseAgent):
             for name in state.features
         ]
 
+        # Main prompt for the current dataset
         base_prompt = (
             "You are a pandas expert. Given a DataFrame `df` with columns "
             f"{json.dumps(schema)}, implement the following new features: "
             f"{'; '.join(feature_descriptions)}. "
             "Assume all categorical columns are already encoded as numeric. Only use numeric columns in formulas. "
             "Avoid chained assignments and use df.loc for setting values. "
+            "If you need to use .str or regex operations on a column, always check and convert the column to string first (e.g., df['col'] = df['col'].astype(str)). "
             "Return JSON with 'code' (Python code modifying df in place) and 'logs' (one message per feature describing the action)."
         )
-
         llm_resp = _query_llm(base_prompt)
         try:
             parsed: dict[str, object] = json.loads(llm_resp)
@@ -137,13 +138,36 @@ class Agent(BaseAgent):
             exec(code, exec_globals, local_vars)
             # Ensure all features are numeric and have no missing values
             local_vars['df'] = ensure_numeric_features(local_vars['df'], state.target, state)
+        except (TypeError, AttributeError) as e:
+            state.append_log(f"FeatureImplementation: LLM code failed with error: {e}. Attempting to coerce only relevant columns to string and retry.")
+            # Parse code to find columns used with .str or regex
+            import re as _re
+            str_cols = set()
+            # Find df['col'].str or df["col"].str patterns
+            for match in _re.finditer(r"df\[['\"]([\w_]+)['\"]\]\.str", code):
+                str_cols.add(match.group(1))
+            # Find regex usage: df['col'].apply(lambda x: re.search(...))
+            for match in _re.finditer(r"df\[['\"]([\w_]+)['\"]\]\.apply\(lambda", code):
+                str_cols.add(match.group(1))
+            local_vars = {'df': state.df.copy(), 'target': state.target}
+            for col in str_cols:
+                if col in local_vars['df'].columns:
+                    local_vars['df'][col] = local_vars['df'][col].astype(str)
+            try:
+                exec(code, exec_globals, local_vars)
+                local_vars['df'] = ensure_numeric_features(local_vars['df'], state.target, state)
+                state.append_log("FeatureImplementation: Retry after selective coercion succeeded.")
+            except Exception as e2:
+                state.append_log(f"FeatureImplementation: Retry after selective coercion failed with error: {e2}. Skipping this feature.")
+                return state
         except Exception as e:
             state.append_log(f"FeatureImplementation: LLM code failed with error: {e}")
             # Retry: prompt LLM for a fix
             fix_prompt = (
                 f"The previous code for implementing features failed with error: {e}. "
                 f"Here is the code that failed:\n{code}\n"
-                "Please provide corrected Python code for the same feature implementation as a JSON object with a single key 'code'."
+                "Please provide corrected Python code for the same feature implementation as a JSON object with a single key 'code'. "
+                "If you use .str or regex, always convert the column to string first."
             )
             fixed_code_json = _query_llm(fix_prompt)
             try:
@@ -164,6 +188,7 @@ class Agent(BaseAgent):
             except Exception as e2:
                 state.append_log(f"FeatureImplementation: LLM code retry failed with error: {e2}")
                 raise RuntimeError(f"LLM code retry failed with error: {e2}")
+        # After successful execution, always append the code to pending_code for tracking
         state.append_pending_code(stage_name, code)
         return state
 

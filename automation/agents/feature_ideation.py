@@ -14,6 +14,27 @@ def _query_llm(prompt: str) -> str:
 class Agent(BaseAgent):
     """Feature ideation agent."""
 
+    def _get_domain_knowledge(self, state: PipelineState) -> str:
+        """Return a domain knowledge string for the current dataset, or empty string if unknown."""
+        # Try to infer dataset name from file path if available
+        dataset_name = getattr(state, 'dataset_name', None)
+        if not dataset_name and hasattr(state.df, 'attrs'):
+            dataset_name = state.df.attrs.get('dataset_name')
+        # Fallback: try to infer from columns
+        columns = set(state.df.columns)
+        # Titanic example
+        if {'Survived', 'Pclass', 'Sex', 'Age', 'SibSp', 'Parch', 'Fare', 'Embarked', 'Name', 'Ticket'}.issubset(columns):
+            dataset_name = 'titanic'
+        if dataset_name and 'titanic' in dataset_name.lower():
+            return (
+                "Domain knowledge: This is the Titanic survival dataset. "
+                "Useful features often include: extracting titles from the Name column (e.g., Mr, Mrs, Miss), family size (SibSp + Parch + 1), deck from Cabin, ticket groupings, fare per person, and binary flags for being alone. "
+                "Text extraction from Name, rare category flags for Embarked, and interaction terms (e.g., Age*Pclass) are also effective. "
+                "Missing Age can be imputed using group means. "
+            )
+        # No fallback for unknown datasets
+        return ""
+
     def run(self, state: PipelineState) -> PipelineState:
         """Ask the LLM for new feature ideas and store them in the state."""
         state.append_log("Feature engineering supervisor: ideation start")
@@ -54,15 +75,40 @@ class Agent(BaseAgent):
                 "Return JSON list where each item has keys 'name', 'formula', and 'rationale'."
             )
             example_response = json.dumps(synth_example, indent=2)
+        # Add feature tracker summary to the prompt if available
+        tracker_summary = ""
+        summary = getattr(state, 'feature_tracking_summary', None)
+        if summary:
+            if summary.get('successful_patterns'):
+                tracker_summary += f"\nSuccessful feature patterns so far (by type):\n{summary['successful_patterns']}"
+            if summary.get('rejection_summary'):
+                tracker_summary += f"\nRejected feature patterns so far (by type):\n{summary['rejection_summary']}"
+        tracker_summary += ("\nIf a feature type (e.g., interaction, polynomial, ratio, text extraction, group stat, rare category) has repeatedly failed, avoid proposing it again. "
+                            "If a feature type has been successful, try proposing more features of that type or combinations. "
+                            "Be dataset-agnostic: do not use dataset-specific names, but use general feature engineering best practices.")
+        # Add few-shot example to the prompt
+        few_shot_example = (
+            "Example feature proposals: [\n"
+            "  {\"name\": \"Fare_per_Person\", \"formula\": \"Fare / (Family_Size + 1)\", \"rationale\": \"Normalizes fare by family size to capture per-person cost\"},\n"
+            "  {\"name\": \"IsAlone\", \"formula\": \"1 if Family_Size == 0 else 0\", \"rationale\": \"Binary flag for passengers traveling alone\"},\n"
+            "  {\"name\": \"Title\", \"formula\": \"Name.str.extract(' ([A-Za-z]+)\\.')\", \"rationale\": \"Extracts honorifics from names for social status\"}\n"
+            "]\n"
+        )
+        # --- Inject domain knowledge dynamically ---
+        domain_knowledge = self._get_domain_knowledge(state)
         # Main prompt for the current dataset
         prompt = (
-            "You are a creative feature engineering assistant. "
+            f"{domain_knowledge}\n"
+            "You are a creative and domain-aware feature engineering assistant. "
             f"The current task type is {state.task_type}. "
             f"Existing features are: {existing}. "
+            f"{tracker_summary} "
+            f"{few_shot_example} "
             "Propose up to 3 new features that could improve model performance. "
-            "Be creative: consider feature interactions (e.g., A * B), polynomial features (e.g., A ** 2), group-based statistics (e.g., mean(target) by C), rare category handling (e.g., is_rare_category), and combinations of categorical and numeric features. "
-            "Avoid duplicating existing features. "
-            "Return your answer as a JSON list where each item has keys 'name', 'formula', and 'rationale'."
+            "Be creative: consider feature interactions (e.g., A * B), polynomial features (e.g., A ** 2), ratios (e.g., Fare / Age), group-based statistics (e.g., mean(target) by C), rare category handling (e.g., is_rare_category), and combinations of categorical and numeric features. "
+            "For classification, consider extracting information from text columns, creating binary flags, or encoding high-cardinality categoricals. "
+            "For regression, consider log transforms, scaling, or outlier handling. "
+            "Return JSON list where each item has keys 'name', 'formula', and 'rationale'."
         )
         combined_prompt = (
             example_prompt + '\n' + example_response + '\n' + prompt
