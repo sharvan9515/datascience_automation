@@ -3,20 +3,29 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import train_test_split
 import os
 import pandas as pd
-import re
 
 # Set your dataset path and target column here
 csv_path = 'your_data.csv'  # TODO: set your CSV file path
 target = 'your_target_column'  # TODO: set your target column name
 df = pd.read_csv(csv_path)
-# Engineered features included in this pipeline: ['Age_x_Fare', 'Family_Size_x_Fare']
+# Engineered features included in this pipeline: ['Age_Pclass', 'Family_Size']
 # --- Preprocessing ---
 df['Age'] = df['Age'].fillna(df['Age'].mean())
-df['Sex'] = df['Sex'].astype('category').cat.codes
-df = pd.get_dummies(df, columns=['Embarked'])
+df['Embarked'] = df['Embarked'].fillna(df['Embarked'].mode()[0])
+df['PassengerId'] = df['PassengerId'].fillna(df['PassengerId'].mean())
+df['Survived'] = df['Survived'].fillna(df['Survived'].mean())
+df['Pclass'] = df['Pclass'].fillna(df['Pclass'].mean())
+df['Name'] = df['Name'].fillna(df['Name'].mean())
+df['Sex'] = df['Sex'].fillna(df['Sex'].mean())
+df['SibSp'] = df['SibSp'].fillna(df['SibSp'].mean())
+df['Parch'] = df['Parch'].fillna(df['Parch'].mean())
+df['Ticket'] = df['Ticket'].fillna(df['Ticket'].mean())
+df['Fare'] = df['Fare'].fillna(df['Fare'].mean())
+df['Cabin'] = df['Cabin'].fillna(df['Cabin'].mean())
+df['Embarked'] = df['Embarked'].fillna(df['Embarked'].mean())
 # --- Feature Engineering ---
-df['Family_Size_x_Fare'] = (df['SibSp'] + df['Parch'] + 1) * df['Fare']
-df['Age_x_Fare'] = df['Age'] * df['Fare']
+df['Family_Size'] = df['SibSp'] + df['Parch'] + 1
+df['Age_Pclass'] = df['Age'] * df['Pclass']
 # --- Modeling ---
 X = df.drop(columns=['Survived'])
 y = df['Survived']

@@ -33,7 +33,16 @@ class Agent(BaseAgent):
                 "Missing Age can be imputed using group means. "
             )
         # No fallback for unknown datasets
-        return ""
+        return "Domain knowledge: This is a tabular dataset. "
+        prompt = "Domain knowledge: This is a tabular dataset. "
+        if num_cols:
+            prompt += f"Numeric columns: {num_cols}. You can propose features such as log transforms, polynomial features, ratios, differences, sums, means, z-scores, and interactions between numeric columns etc and many more "
+        if cat_cols:
+            prompt += f"Categorical columns: {cat_cols}. You can propose features such as one-hot encoding, frequency encoding, extracting substrings, rare category flags, or group-based statistics (e.g., mean target by category). and many more "
+        if not num_cols and not cat_cols:
+            prompt += "No numeric or categorical columns detected. You can propose features such as row counts, missing value indicators, or other creative transformations based on available data types. "
+        prompt += "You may also propose features that combine different column types, such as group means, or binary flags for special values. Always be creative and consider feature interactions, polynomial features, and domain-agnostic best practices."
+        return prompt
 
     def run(self, state: PipelineState) -> PipelineState:
         """Ask the LLM for new feature ideas and store them in the state."""

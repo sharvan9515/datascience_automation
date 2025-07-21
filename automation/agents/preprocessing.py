@@ -111,6 +111,17 @@ class Agent(BaseAgent):
             for f in must_keep:
                 if f in local_vars['df'].columns and not pd.api.types.is_numeric_dtype(local_vars['df'][f]):
                     raise RuntimeError(f"LLM preprocessing did not encode must_keep feature '{f}' as numeric.")
+            # --- PATCH: Guarantee all non-target columns are numeric ---
+            non_numeric_cols = [col for col in local_vars['df'].columns if col != state.target and not pd.api.types.is_numeric_dtype(local_vars['df'][col])]
+            for col in non_numeric_cols:
+                state.append_log(f"Preprocessing: Forcing encoding of non-numeric column '{col}' as categorical codes (guaranteed patch).")
+                local_vars['df'][col] = local_vars['df'][col].astype('category').cat.codes
+            # After forced encoding, check again
+            still_non_numeric = [col for col in local_vars['df'].columns if col != state.target and not pd.api.types.is_numeric_dtype(local_vars['df'][col])]
+            if still_non_numeric:
+                raise RuntimeError(f"Preprocessing: Columns remain non-numeric after forced encoding: {still_non_numeric}")
+            # Overwrite state.df with fully numeric DataFrame
+            state.df = local_vars['df']
         except Exception as e:
             state.append_log(f"Preprocessing: LLM code failed with error: {e}")
             raise
