@@ -107,10 +107,7 @@ class Agent(BaseAgent):
         else:
             state.no_improve_rounds += 1
 
-        state.iterate = not (
-            state.no_improve_rounds >= state.patience
-            or state.iteration >= state.max_iter
-        )
+        state.iterate = state.no_improve_rounds < state.patience
 
         log_msg = f"ModelEvaluation decision: iterate={state.iterate} (hardcoded logic)"
         state.append_log(log_msg)

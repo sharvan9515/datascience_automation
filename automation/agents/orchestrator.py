@@ -340,12 +340,12 @@ def try_model_training(df, target, task_type):
         return False
 
 
-def run(state: PipelineState, max_iter: int = 10, patience: int = 5, score_threshold: float = 0.80) -> PipelineState:
+def run(state: PipelineState, patience: int = 20, score_threshold: float = 0.80) -> PipelineState:
     """Run the pipeline with LLM-guided orchestration and iteration."""
     state.append_log("Orchestrator supervisor: booting pipeline")
     state.best_score = None
     state.no_improve_rounds = 0
-    state.max_iter = max_iter
+    state.max_iter = 0  # deprecated
     state.patience = patience
     state.best_df = state.df.copy()
     state.best_code_blocks = {k: v.copy() for k, v in state.code_blocks.items()}
@@ -358,8 +358,7 @@ def run(state: PipelineState, max_iter: int = 10, patience: int = 5, score_thres
     state.iterate = True
     agentic_attempts = 0
     max_agentic_attempts = 3
-    min_iterations_before_stop = 30  # Minimum iterations before early stopping
-    while state.iterate and state.iteration < max_iter:
+    while state.iterate:
         state.append_log(f"Orchestrator: starting iteration {state.iteration}")
         state = _run_decided_steps(state)
         agentic_attempts += 1
@@ -367,9 +366,8 @@ def run(state: PipelineState, max_iter: int = 10, patience: int = 5, score_thres
         state = EnsembleAgent().run(state)
         if state.best_score is not None and prev_score is not None and state.best_score > prev_score:
             state.append_log("EnsembleAgent: ensemble improved the score.")
-        # Safeguard: only stop if no improvement for 'patience' rounds AND min_iterations_before_stop is reached
-        if state.iteration >= min_iterations_before_stop and state.no_improve_rounds >= patience:
-            state.append_log(f"No improvement for {patience} consecutive iterations after {min_iterations_before_stop} minimum. Triggering hyperparameter search.")
+        if state.no_improve_rounds >= patience:
+            state.append_log(f"No improvement for {patience} consecutive iterations. Triggering hyperparameter search.")
             state = HyperparameterSearchAgent().run(state)
             break
         # Check if data is model-ready and model training works
@@ -393,9 +391,9 @@ def run(state: PipelineState, max_iter: int = 10, patience: int = 5, score_thres
                 state.append_log("BaselineAgent fallback failed. Stopping pipeline.")
                 break
         state.iteration += 1
-    # After all iterations or patience, trigger hyperparameter search if not already done
-    if state.no_improve_rounds >= patience or state.iteration >= max_iter:
-        state.append_log("Triggering hyperparameter search after all iterations.")
+    # After stopping due to patience, trigger hyperparameter search if not already done
+    if state.no_improve_rounds >= patience:
+        state.append_log("Triggering hyperparameter search after iterations.")
         state = HyperparameterSearchAgent().run(state)
     # Before assembling final code, log the contents of pending_code and code_blocks for debugging
     import pprint

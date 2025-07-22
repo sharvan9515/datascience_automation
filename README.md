@@ -5,7 +5,7 @@ This project provides an agentic, LLM-driven data science pipeline that automate
 ## Features
 - Upload your own CSV dataset
 - Select the target column
-- Set patience (early stopping rounds)
+- Set patience (number of rounds without improvement before stopping; default 20)
 - Run the pipeline with a single click
 - View the final model score (accuracy or F1)
 - Download or copy the final assembled code for reproducibility
@@ -26,7 +26,7 @@ streamlit run streamlit_app.py
 - Open [http://localhost:8501](http://localhost:8501) in your browser.
 - **Upload** your CSV file.
 - **Select** the target column from the dropdown.
-- **Set** the patience value (number of rounds with no improvement before stopping).
+- **Set** the patience value (number of rounds with no improvement before stopping, default 20).
 - **Click** "Run Pipeline".
 - **View** the final model score (accuracy or F1) and the full assembled code.
 
@@ -42,7 +42,7 @@ streamlit run streamlit_app.py
 ## Advanced Usage
 - You can still run the pipeline from the command line:
   ```bash
-  python run_agentic_pipeline.py <csv_path> <target_column> --patience <patience>
+  python run_agentic_pipeline.py <csv_path> <target_column> --patience 20
   ```
 - All outputs and logs are saved in the `output/` directory.
 

@@ -17,7 +17,7 @@ if uploaded_file is not None:
     # 2. Target column selector
     target = st.selectbox('Select target column', df.columns)
     # 3. Patience input
-    patience = st.number_input('Set patience (early stopping rounds)', min_value=1, max_value=100, value=10)
+    patience = st.number_input('Set patience (early stopping rounds)', min_value=1, max_value=100, value=20)
     # 4. Run button
     if st.button('Run Pipeline'):
         # Save uploaded file to a temp location
