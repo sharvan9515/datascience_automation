@@ -315,9 +315,15 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
 
 
 def is_model_ready(df, target):
-    # Returns True if all features (except target) are numeric and no missing values
+    """Return ``True`` if all features (except the target) are numeric and have no
+    missing values."""
+
+    import numpy as np
+
     X = df.drop(columns=[target])
-    return X.select_dtypes(exclude=[float, int]).empty and not X.isnull().any().any()
+    # ``exclude=[np.number]`` covers all numeric dtypes (int8, int16, float32, etc.)
+    non_numeric = X.select_dtypes(exclude=[np.number])
+    return non_numeric.empty and not X.isnull().any().any()
 
 def try_model_training(df, target, task_type):
     from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
