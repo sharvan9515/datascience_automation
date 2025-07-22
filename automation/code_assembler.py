@@ -94,6 +94,11 @@ def run(state: PipelineState) -> PipelineState:
             used_imports.add(import_stmt)
     import_lines = sorted(used_imports)
 
+    need_helper = any(
+        "ensure_numeric_features(" in l
+        for l in preprocessing_code + included_snippets + modeling_code
+    )
+
     # Deduplicate lines while preserving order
     def dedup_lines(lines):
         seen = set()
@@ -107,6 +112,20 @@ def run(state: PipelineState) -> PipelineState:
     lines = []
     lines.extend(import_lines)
     lines.append("")
+    if need_helper:
+        lines.extend([
+            "def ensure_numeric_features(df, target):",
+            "    for col in df.columns:",
+            "        if col == target:",
+            "            continue",
+            "        if not pd.api.types.is_numeric_dtype(df[col]):",
+            "            df[col] = df[col].astype('category').cat.codes",
+            "        if df[col].isnull().any():",
+            "            fill_value = df[col].mean() if pd.api.types.is_numeric_dtype(df[col]) else df[col].mode()[0]",
+            "            df[col] = df[col].fillna(fill_value)",
+            "    return df",
+            "",
+        ])
     lines.append("# Set your dataset path and target column here")
     lines.append("csv_path = 'your_data.csv'  # TODO: set your CSV file path")
     lines.append("target = 'your_target_column'  # TODO: set your target column name")

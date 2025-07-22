@@ -125,7 +125,8 @@ class Agent(BaseAgent):
         except Exception as e:
             state.append_log(f"Preprocessing: LLM code failed with error: {e}")
             raise
-        state.append_pending_code(stage_name, code)
+        final_code = f"{code}\n# Ensure all columns are numeric\ndf = ensure_numeric_features(df, target)"
+        state.append_pending_code(stage_name, final_code)
         return state
 
 
