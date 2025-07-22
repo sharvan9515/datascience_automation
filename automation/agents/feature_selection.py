@@ -6,6 +6,7 @@ from automation.pipeline_state import PipelineState
 from ..prompt_utils import query_llm
 from . import model_evaluation
 from .base import BaseAgent
+from .preprocessing import ensure_numeric_features
 from concurrent.futures import ThreadPoolExecutor
 import sklearn.model_selection
 
@@ -35,6 +36,7 @@ class Agent(BaseAgent):
         from sklearn.model_selection import cross_val_score
         # Baseline without proposed features
         baseline_df = df.drop(columns=new_feats, errors="ignore")
+        baseline_df = ensure_numeric_features(baseline_df, state.target, state)
         baseline_X = baseline_df.drop(columns=[state.target], errors="ignore")
         baseline_y = baseline_df[state.target]
         baseline_X = baseline_X.fillna(0)
@@ -60,6 +62,7 @@ class Agent(BaseAgent):
             # Try adding each feature to the current set
             trial_set = kept_features + [feat]
             trial_df = df[trial_set + [state.target]].copy()
+            trial_df = ensure_numeric_features(trial_df, state.target, state)
             trial_X = trial_df.drop(columns=[state.target], errors="ignore")
             trial_y = trial_df[state.target]
             trial_X = trial_X.fillna(0)
