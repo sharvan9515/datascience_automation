@@ -13,7 +13,7 @@ if __name__ == "__main__":
     df = pd.read_csv(csv_path)
     state = PipelineState(df=df, target=target)
     try:
-        final_state = run(state)
+        final_state = run(state, patience=20)
     finally:
         # Always assemble code, even on error
         code_assembler.run(state)
@@ -21,4 +21,6 @@ if __name__ == "__main__":
     # Print iteration history for accuracy/score progression
     print("\nIteration History (score progression):")
     for entry in final_state.iteration_history:
-        print(f"Iteration {entry['iteration']}: score={entry.get('best_score', 'N/A')}, metrics={entry.get('metrics', '')}") 
+        print(
+            f"Iteration {entry['iteration']}: score={entry.get('best_score', 'N/A')}, metrics={entry.get('metrics', '')}"
+        )
