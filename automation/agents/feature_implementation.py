@@ -160,6 +160,9 @@ class Agent(BaseAgent):
             except Exception as e2:
                 state.append_log(f"FeatureImplementation: Retry after selective coercion failed with error: {e2}. Skipping this feature.")
                 return state
+        except KeyError as e:
+            state.append_log(f"FeatureImplementation: Missing column error: {e}. Skipping this feature.")
+            return state
         except Exception as e:
             state.append_log(f"FeatureImplementation: LLM code failed with error: {e}")
             # Retry: prompt LLM for a fix
