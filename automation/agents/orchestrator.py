@@ -7,7 +7,6 @@ from typing import Dict, cast
 
 import pandas as pd
 from sklearn.decomposition import PCA
-from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
 from automation.pipeline_state import PipelineState
