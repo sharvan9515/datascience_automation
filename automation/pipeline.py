@@ -4,6 +4,8 @@ import argparse
 import pandas as pd
 import os
 
+from automation.dataset_profiler import EnhancedDatasetProfiler
+
 from automation.pipeline_state import PipelineState
 from automation.agents import orchestrator
 
@@ -16,6 +18,7 @@ def run_pipeline(csv_path: str, target: str, patience: int = 20, score_threshold
 
     df = pd.read_csv(csv_path)
     state = PipelineState(df=df, target=target)
+    state.profile = EnhancedDatasetProfiler.generate_comprehensive_profile(df, target)
     return orchestrator.run(state, patience=patience, score_threshold=score_threshold)
 
 
