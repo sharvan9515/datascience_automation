@@ -383,12 +383,24 @@ def run(state: PipelineState, patience: int = 20, score_threshold: float = 0.80)
     max_agentic_attempts = 3
     while state.iterate:
         state.append_log(f"Orchestrator: starting iteration {state.iteration}")
-        state = _run_decided_steps(state)
-        agentic_attempts += 1
-        prev_score = state.best_score
-        state = EnsembleAgent().run(state)
-        if state.best_score is not None and prev_score is not None and state.best_score > prev_score:
-            state.append_log("EnsembleAgent: ensemble improved the score.")
+        snapshot_version = state.create_snapshot()
+        try:
+            state = _run_decided_steps(state)
+            agentic_attempts += 1
+            prev_score = state.best_score
+            state = EnsembleAgent().run(state)
+            if (
+                state.best_score is not None
+                and prev_score is not None
+                and state.best_score > prev_score
+            ):
+                state.append_log("EnsembleAgent: ensemble improved the score.")
+        except Exception as exc:  # noqa: BLE001
+            state.rollback_to(snapshot_version)
+            state.append_log(
+                f"Orchestrator: rolled back to version {snapshot_version} due to error: {exc}"
+            )
+            break
         if state.no_improve_rounds >= patience:
             state.append_log(f"No improvement for {patience} consecutive iterations. Triggering hyperparameter search.")
             state = HyperparameterSearchAgent().run(state)

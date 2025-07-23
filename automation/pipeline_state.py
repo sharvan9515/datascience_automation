@@ -34,6 +34,10 @@ class PipelineState:
     # Track all trained models for ensembling
     trained_models: list = field(default_factory=list)
 
+    # Internal version counter and snapshots for rollback
+    _version: int = field(default=0, init=False)
+    _snapshots: dict[int, dict] = field(default_factory=dict, init=False)
+
     def append_log(self, message: str) -> None:
         """Append a human-readable message to the pipeline log."""
         self.log.append(str(message))
@@ -59,3 +63,42 @@ class PipelineState:
     def get_trained_models(self):
         """Return all trained models and their metadata."""
         return self.trained_models
+
+    def create_snapshot(self) -> int:
+        """Create a deep copy of key fields and return the snapshot version."""
+
+        self._version += 1
+        self._snapshots[self._version] = {
+            "df": self.df.copy(),
+            "code_blocks": {k: v.copy() for k, v in self.code_blocks.items()},
+            "features": list(self.features),
+            "iteration": self.iteration,
+            "current_score": self.current_score,
+            "best_score": self.best_score,
+            "best_df": self.best_df.copy() if self.best_df is not None else None,
+            "best_code_blocks": {
+                k: v.copy() for k, v in self.best_code_blocks.items()
+            },
+            "best_features": list(self.best_features),
+        }
+        return self._version
+
+    def rollback_to(self, version: int) -> None:
+        """Restore pipeline state from a snapshot by version."""
+
+        snapshot = self._snapshots.get(version)
+        if snapshot is None:
+            raise ValueError(f"No snapshot for version {version}")
+        self.df = snapshot["df"].copy()
+        self.code_blocks = {k: v.copy() for k, v in snapshot["code_blocks"].items()}
+        self.features = list(snapshot["features"])
+        self.iteration = snapshot["iteration"]
+        self.current_score = snapshot["current_score"]
+        self.best_score = snapshot["best_score"]
+        self.best_df = (
+            snapshot["best_df"].copy() if snapshot["best_df"] is not None else None
+        )
+        self.best_code_blocks = {
+            k: v.copy() for k, v in snapshot["best_code_blocks"].items()
+        }
+        self.best_features = list(snapshot["best_features"])
