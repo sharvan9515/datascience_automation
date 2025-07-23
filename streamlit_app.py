@@ -4,6 +4,7 @@ import tempfile
 import os
 import subprocess
 import re
+import json
 
 st.title('Agentic Data Science Pipeline')
 
@@ -45,5 +46,13 @@ if uploaded_file is not None:
         # Only show final assembled code, not pipeline output or errors
         if os.path.exists('finalcode.py'):
             with open('finalcode.py') as f:
-                st.subheader('Final Assembled Code')
-                st.code(f.read(), language='python') 
+                code_content = f.read()
+            st.subheader('Final Assembled Code')
+            st.code(code_content, language='python')
+            st.download_button('Download finalcode.py', code_content, file_name='finalcode.py')
+
+        if os.path.exists('output/logs.json'):
+            with open('output/logs.json') as f:
+                logs = json.load(f)
+            st.subheader('Last 5 Log Entries')
+            st.code('\n'.join(logs[-5:]))
