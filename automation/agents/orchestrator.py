@@ -81,7 +81,11 @@ def _decide_steps(state: PipelineState) -> Dict[str, Dict[str, object]]:
         f"Recent logs: {state.log[-3:]}"
     )
 
-    llm_raw = _query_llm(prompt)
+    try:
+        llm_raw = _query_llm(prompt)
+    except RuntimeError as exc:
+        state.append_log(f"Orchestrator: LLM query failed: {exc}")
+        return {}
     try:
         parsed = json.loads(llm_raw)
     except Exception as exc:  # noqa: BLE001
@@ -191,8 +195,10 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
                         llm_raw = _query_llm(prompt)
                         parsed = json.loads(llm_raw)
                         retry_code = parsed.get("code")
-                    except Exception as e:  # noqa: BLE001
+                    except RuntimeError as e:  # noqa: BLE001
                         state.append_log(f"FeatureImplementation retry LLM failed: {e}")
+                    except Exception as e:  # noqa: BLE001
+                        state.append_log(f"FeatureImplementation retry parse failed: {e}")
 
                 if retry_code:
                     try:

@@ -72,7 +72,11 @@ class Agent(BaseAgent):
             f"{X.shape[1]} features. Respond in JSON with keys 'model' and 'params'."
         )
 
-        llm_raw = _query_llm(prompt)
+        try:
+            llm_raw = _query_llm(prompt)
+        except RuntimeError as exc:
+            state.append_log(f"ModelTraining: LLM query failed: {exc}")
+            return state
         try:
             parsed = json.loads(llm_raw)
         except Exception as exc:  # noqa: BLE001
