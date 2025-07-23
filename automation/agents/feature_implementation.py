@@ -103,7 +103,11 @@ class Agent(BaseAgent):
             "If you need to use .str or regex operations on a column, always check and convert the column to string first (e.g., df['col'] = df['col'].astype(str)). "
             "Return JSON with 'code' (Python code modifying df in place) and 'logs' (one message per feature describing the action)."
         )
-        llm_resp = _query_llm(base_prompt)
+        try:
+            llm_resp = _query_llm(base_prompt)
+        except RuntimeError as exc:
+            state.append_log(f"FeatureImplementation: LLM query failed: {exc}")
+            return state
         try:
             parsed: dict[str, object] = json.loads(llm_resp)
         except json.JSONDecodeError as exc:
@@ -172,7 +176,13 @@ class Agent(BaseAgent):
                 "Please provide corrected Python code for the same feature implementation as a JSON object with a single key 'code'. "
                 "If you use .str or regex, always convert the column to string first."
             )
-            fixed_code_json = _query_llm(fix_prompt)
+            try:
+                fixed_code_json = _query_llm(fix_prompt)
+            except RuntimeError as exc2:
+                state.append_log(f"FeatureImplementation: fix query failed: {exc2}")
+                raise RuntimeError(
+                    "LLM did not return valid code for feature implementation"
+                ) from exc2
             try:
                 parsed = json.loads(fixed_code_json)
                 fixed_code = parsed.get("code", "")

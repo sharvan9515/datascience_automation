@@ -73,7 +73,11 @@ class Agent(BaseAgent):
             "{\n  'logs': [\n    'Filled 2 missing values in column A with mean.',\n    'Column B is binary categorical, encoded as ordinal (0/1).',\n    'Column D is high-cardinality categorical, encoded with frequency encoding.',\n    'Filled 1 missing value in column D with mode.'\n  ],\n  'code': \"df['A'] = df['A'].fillna(df['A'].mean())\\ndf['B'] = df['B'].astype('category').cat.codes\\ndf['D'] = df['D'].map(df['D'].value_counts())\\ndf['D'] = df['D'].fillna(df['D'].mode()[0])\",\n  'rationale': 'Numeric columns: mean imputation. Binary categoricals: ordinal encoding. High-cardinality categoricals: frequency encoding. All steps logged.'\n}\n"
             "---\nNow, using the provided schema, missing, unique_counts, and must_keep, produce your JSON response."
         )
-        llm_resp = _query_llm(base_prompt)
+        try:
+            llm_resp = _query_llm(base_prompt)
+        except RuntimeError as exc:
+            state.append_log(f"Preprocessing: LLM query failed: {exc}")
+            return state
         try:
             parsed = json.loads(llm_resp)
         except json.JSONDecodeError as exc:

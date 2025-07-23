@@ -122,7 +122,11 @@ class Agent(BaseAgent):
         combined_prompt = (
             example_prompt + '\n' + example_response + '\n' + prompt
         )
-        llm_raw = _query_llm(combined_prompt)
+        try:
+            llm_raw = _query_llm(combined_prompt)
+        except RuntimeError as exc:
+            state.append_log(f"FeatureIdeation: LLM query failed: {exc}")
+            return state
         try:
             proposals = json.loads(llm_raw)
         except Exception as exc:
@@ -131,7 +135,13 @@ class Agent(BaseAgent):
             simple_prompt = (
                 f"Given a pandas DataFrame with columns {existing}, propose up to 3 new features as a JSON list with keys 'name', 'formula', and 'rationale'."
             )
-            llm_raw_simple = _query_llm(simple_prompt)
+            try:
+                llm_raw_simple = _query_llm(simple_prompt)
+            except RuntimeError as exc2:
+                state.append_log(f"FeatureIdeation: retry query failed: {exc2}")
+                raise RuntimeError(
+                    "LLM did not return any feature proposals after retry"
+                ) from exc2
             try:
                 proposals = json.loads(llm_raw_simple)
             except Exception as exc2:

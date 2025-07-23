@@ -50,7 +50,11 @@ class Agent(BaseAgent):
             "Respond in JSON with keys 'apply_pca' (yes/no) and 'reason'."
         )
 
-        llm_raw = _query_llm(prompt)
+        try:
+            llm_raw = _query_llm(prompt)
+        except RuntimeError as exc:
+            state.append_log(f"FeatureReduction: LLM query failed: {exc}")
+            return state
         try:
             parsed = json.loads(llm_raw)
         except Exception as exc:  # noqa: BLE001

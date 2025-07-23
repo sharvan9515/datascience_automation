@@ -30,7 +30,11 @@ class Agent(BaseAgent):
             f"Stats: {json.dumps(stats, default=str)}"
         )
 
-        llm_raw = _query_llm(prompt)
+        try:
+            llm_raw = _query_llm(prompt)
+        except RuntimeError as exc:
+            state.append_log(f"TaskIdentification: LLM query failed: {exc}")
+            return state
         try:
             parsed = json.loads(llm_raw)
         except json.JSONDecodeError as exc:

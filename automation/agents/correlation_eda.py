@@ -62,7 +62,11 @@ class Agent(BaseAgent):
             f"Outlier counts: {outlier_counts}"
         )
 
-        summary = _query_llm(prompt)
+        try:
+            summary = _query_llm(prompt)
+        except RuntimeError as exc:
+            state.append_log(f"CorrelationEDA: LLM query failed: {exc}")
+            return state
         if not summary:
             raise RuntimeError("LLM did not return a summary for correlation EDA")
         state.append_log(f"CorrelationEDA: {summary}")
