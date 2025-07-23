@@ -3,6 +3,7 @@ import pandas as pd
 from automation.pipeline_state import PipelineState
 from ..prompt_utils import query_llm
 from .base import BaseAgent
+from automation.utils.sandbox import safe_exec
 
 
 def _query_llm(prompt: str) -> str:
@@ -105,7 +106,13 @@ class Agent(BaseAgent):
         try:
             exec_globals = {'pd': pd}
             local_vars = {'df': state.df.copy(), 'target': state.target}
-            exec(code, exec_globals, local_vars)
+            local_vars = safe_exec(
+                code,
+                state=state,
+                extra_globals=exec_globals,
+                local_vars=local_vars,
+                allowed_modules={'pandas'},
+            )
             local_vars['df'] = ensure_numeric_features(local_vars['df'], state.target, state)
             # Post-LLM validation: check must_keep features
             missing_features = [f for f in must_keep if f in df.columns and f not in local_vars['df'].columns]

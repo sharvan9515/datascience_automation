@@ -10,6 +10,7 @@ import sklearn
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from sklearn.impute import SimpleImputer
 from xgboost import XGBClassifier, XGBRegressor
+from automation.utils.sandbox import safe_exec
 
 from automation.pipeline_state import PipelineState
 from ..prompt_utils import query_llm
@@ -137,9 +138,16 @@ class Agent(BaseAgent):
             'XGBClassifier': XGBClassifier,
             'XGBRegressor': XGBRegressor,
         }
+        allowed = {'re', 'numpy', 'pandas', 'sklearn', 'xgboost'}
         try:
             local_vars = {'df': state.df.copy(), 'target': state.target}
-            exec(code, exec_globals, local_vars)
+            local_vars = safe_exec(
+                code,
+                state=state,
+                extra_globals=exec_globals,
+                local_vars=local_vars,
+                allowed_modules=allowed,
+            )
             # Ensure all features are numeric and have no missing values
             local_vars['df'] = ensure_numeric_features(local_vars['df'], state.target, state)
         except (TypeError, AttributeError) as e:
@@ -158,7 +166,13 @@ class Agent(BaseAgent):
                 if col in local_vars['df'].columns:
                     local_vars['df'][col] = local_vars['df'][col].astype(str)
             try:
-                exec(code, exec_globals, local_vars)
+                local_vars = safe_exec(
+                    code,
+                    state=state,
+                    extra_globals=exec_globals,
+                    local_vars=local_vars,
+                    allowed_modules=allowed,
+                )
                 local_vars['df'] = ensure_numeric_features(local_vars['df'], state.target, state)
                 state.append_log("FeatureImplementation: Retry after selective coercion succeeded.")
             except Exception as e2:
@@ -193,7 +207,13 @@ class Agent(BaseAgent):
                 state.append_log(f"FeatureImplementation: LLM code retry JSON parse failed: {e_json}. Raw response: {fixed_code_json}")
                 raise RuntimeError(f"LLM did not return valid code for feature implementation. Last response: {fixed_code_json}")
             try:
-                exec(fixed_code, exec_globals, local_vars)
+                local_vars = safe_exec(
+                    fixed_code,
+                    state=state,
+                    extra_globals=exec_globals,
+                    local_vars=local_vars,
+                    allowed_modules=allowed,
+                )
                 # Ensure all features are numeric and have no missing values
                 local_vars['df'] = ensure_numeric_features(local_vars['df'], state.target, state)
                 state.append_log("FeatureImplementation: LLM code retry succeeded.")

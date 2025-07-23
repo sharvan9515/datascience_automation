@@ -11,6 +11,7 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
 from automation.pipeline_state import PipelineState
 from ..prompt_utils import query_llm
+from automation.utils.sandbox import safe_exec
 from .task_identification import Agent as TaskIdentificationAgent
 from .preprocessing import Agent as PreprocessingAgent
 from .correlation_eda import Agent as CorrelationEDAAgent
@@ -111,7 +112,12 @@ def _decide_steps(state: PipelineState) -> Dict[str, Dict[str, object]]:
 def _evaluate_preprocessing(snippet, df, target, task_type):
     trial_df = df.copy()
     try:
-        exec(snippet, {"pd": pd}, {"df": trial_df, "target": target})
+        safe_exec(
+            snippet,
+            extra_globals={"pd": pd},
+            local_vars={"df": trial_df, "target": target},
+            allowed_modules={"pandas"},
+        )
     except Exception as e:
         return False, f"Preprocessing failed: {e}", None
     # Data integrity check
@@ -177,7 +183,13 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
             env = {"pd": pd, "PCA": PCA}
             local_vars = {"df": trial_df, "target": state.target}
             try:
-                exec(snippet, env, local_vars)
+                local_vars = safe_exec(
+                    snippet,
+                    state=state,
+                    extra_globals=env,
+                    local_vars=local_vars,
+                    allowed_modules={"pandas", "sklearn", "numpy", "xgboost"},
+                )
             except Exception as exc:  # noqa: BLE001
                 state.append_log(f"{stage} snippet failed: {exc}")
                 retry_code = None
@@ -202,7 +214,13 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
 
                 if retry_code:
                     try:
-                        exec(retry_code, env, local_vars)
+                        local_vars = safe_exec(
+                            retry_code,
+                            state=state,
+                            extra_globals=env,
+                            local_vars=local_vars,
+                            allowed_modules={"pandas", "sklearn", "numpy", "xgboost"},
+                        )
                         state.append_log("FeatureImplementation retry succeeded")
                         snippet = retry_code
                     except Exception as exc2:  # noqa: BLE001
