@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable, Tuple
+from typing import Iterable, Tuple, Dict, Any
 import os
 import re
 import time
@@ -108,3 +108,68 @@ def query_llm(
                     f"LLM call failed after {max_retries} attempts: {exc}"
                 ) from exc
             time.sleep(2 ** attempt)
+
+
+def create_context_aware_prompt(
+    profile: Dict[str, Any] | None,
+    task_type: str,
+    stage: str,
+) -> str:
+    """Return a dataset-aware context string for LLM prompts."""
+
+    lines: list[str] = [f"You are assisting with {stage} for a {task_type} task."]
+    if not profile:
+        return "\n".join(lines)
+
+    stats = profile.get("statistical_summary", {})
+    n_cols = len(stats)
+    n_rows = 0
+    for metrics in stats.values():
+        count = metrics.get("count")
+        if isinstance(count, (int, float)):
+            n_rows = max(n_rows, int(count))
+    if n_rows and n_cols:
+        lines.append(f"Dataset shape: {n_rows} rows x {n_cols} columns.")
+
+    missing = profile.get("missing_patterns", {}).get("column_summary", {})
+    miss_counts = {
+        k: v.get("missing_count", 0)
+        for k, v in missing.items()
+        if v.get("missing_count", 0) > 0
+    }
+    outliers = profile.get("outlier_detection", {})
+    out_total = sum(outliers.values()) if outliers else 0
+    dq_parts: list[str] = []
+    if miss_counts:
+        dq_parts.append(f"missing values {dict(list(miss_counts.items())[:3])}")
+    if out_total:
+        dq_parts.append(f"outliers {out_total}")
+    if dq_parts:
+        lines.append("Data quality issues: " + ", ".join(dq_parts) + ".")
+
+    cm = profile.get("complexity_metrics", {})
+    cm_parts: list[str] = []
+    if "feature_target_ratio" in cm:
+        cm_parts.append(f"feature/row ratio {cm['feature_target_ratio']:.3f}")
+    if cm.get("noise_level") is not None:
+        cm_parts.append(f"noise level {cm['noise_level']:.3f}")
+    if cm.get("class_imbalance"):
+        cm_parts.append(f"class imbalance {cm['class_imbalance']}")
+    if cm_parts:
+        lines.append("Complexity metrics: " + ", ".join(cm_parts) + ".")
+
+    domain = profile.get("domain_insights", {})
+    domain_parts: list[str] = []
+    sem = domain.get("column_semantics")
+    if sem:
+        domain_parts.append(f"semantics {dict(list(sem.items())[:3])}")
+    temporal = domain.get("temporal_patterns")
+    if temporal:
+        domain_parts.append(f"temporal {dict(list(temporal.items())[:1])}")
+    cardinality = domain.get("categorical_cardinality")
+    if cardinality:
+        domain_parts.append(f"categorical cardinality {dict(list(cardinality.items())[:3])}")
+    if domain_parts:
+        lines.append("Domain characteristics: " + ", ".join(domain_parts) + ".")
+
+    return "\n".join(lines)
