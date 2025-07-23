@@ -7,6 +7,7 @@ from ..prompt_utils import query_llm
 from . import model_evaluation
 from .base import BaseAgent
 from .preprocessing import ensure_numeric_features
+from automation.validators import DataValidator
 from concurrent.futures import ThreadPoolExecutor
 import sklearn.model_selection
 
@@ -27,6 +28,7 @@ class Agent(BaseAgent):
         state.append_log("Feature engineering supervisor: selection start")
 
         df = state.df.copy()
+        snapshot_version = state.create_snapshot()
         stage_name = "feature_selection"
         new_feats = [f for f in state.features if f in df.columns]
 
@@ -83,6 +85,12 @@ class Agent(BaseAgent):
             else:
                 state.append_log(f"FeatureSelection: dropped {feat} ({delta:+.4f} score)")
         # At the end, keep the set if it improves or is neutral
+        ok, reason = DataValidator.validate_transformation(df, current_df, state.target)
+        if not ok:
+            state.append_log(f"FeatureSelection: validation failed - {reason}")
+            state.rollback_to(snapshot_version)
+            return state
+
         state.features = kept_features
         state.df = current_df
 
