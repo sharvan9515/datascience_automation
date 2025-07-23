@@ -11,6 +11,7 @@ from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from sklearn.impute import SimpleImputer
 from xgboost import XGBClassifier, XGBRegressor
 from automation.utils.sandbox import safe_exec
+from automation.validators import DataValidator
 
 from automation.pipeline_state import PipelineState
 from ..prompt_utils import query_llm
@@ -74,6 +75,8 @@ class Agent(BaseAgent):
         state.append_log("Feature engineering supervisor: implementation start")
 
         stage_name = "feature_implementation"
+
+        snapshot_version = state.create_snapshot()
 
         if not state.features:
             # Nothing to implement
@@ -150,6 +153,11 @@ class Agent(BaseAgent):
             )
             # Ensure all features are numeric and have no missing values
             local_vars['df'] = ensure_numeric_features(local_vars['df'], state.target, state)
+            ok, reason = DataValidator.validate_transformation(state.df, local_vars['df'], state.target)
+            if not ok:
+                state.append_log(f"FeatureImplementation: validation failed - {reason}")
+                state.rollback_to(snapshot_version)
+                return state
         except (TypeError, AttributeError) as e:
             state.append_log(f"FeatureImplementation: LLM code failed with error: {e}. Attempting to coerce only relevant columns to string and retry.")
             # Parse code to find columns used with .str or regex
@@ -174,6 +182,11 @@ class Agent(BaseAgent):
                     allowed_modules=allowed,
                 )
                 local_vars['df'] = ensure_numeric_features(local_vars['df'], state.target, state)
+                ok, reason = DataValidator.validate_transformation(state.df, local_vars['df'], state.target)
+                if not ok:
+                    state.append_log(f"FeatureImplementation: validation failed - {reason}")
+                    state.rollback_to(snapshot_version)
+                    return state
                 state.append_log("FeatureImplementation: Retry after selective coercion succeeded.")
             except Exception as e2:
                 state.append_log(f"FeatureImplementation: Retry after selective coercion failed with error: {e2}. Skipping this feature.")
@@ -216,6 +229,11 @@ class Agent(BaseAgent):
                 )
                 # Ensure all features are numeric and have no missing values
                 local_vars['df'] = ensure_numeric_features(local_vars['df'], state.target, state)
+                ok, reason = DataValidator.validate_transformation(state.df, local_vars['df'], state.target)
+                if not ok:
+                    state.append_log(f"FeatureImplementation: validation failed - {reason}")
+                    state.rollback_to(snapshot_version)
+                    return state
                 state.append_log("FeatureImplementation: LLM code retry succeeded.")
                 code = fixed_code
             except Exception as e2:

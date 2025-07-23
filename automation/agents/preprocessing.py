@@ -4,6 +4,7 @@ from automation.pipeline_state import PipelineState
 from ..prompt_utils import query_llm
 from .base import BaseAgent
 from automation.utils.sandbox import safe_exec
+from automation.validators import DataValidator
 
 
 def _query_llm(prompt: str) -> str:
@@ -36,6 +37,7 @@ class Agent(BaseAgent):
         state.append_log("Preprocessing supervisor: starting")
 
         df = state.df.copy()
+        snapshot_version = state.create_snapshot()
         stage_name = "preprocessing"
 
         # Use must_keep from state if present, else default to []
@@ -131,6 +133,13 @@ class Agent(BaseAgent):
             still_non_numeric = [col for col in local_vars['df'].columns if col != state.target and not pd.api.types.is_numeric_dtype(local_vars['df'][col])]
             if still_non_numeric:
                 raise RuntimeError(f"Preprocessing: Columns remain non-numeric after forced encoding: {still_non_numeric}")
+
+            ok, reason = DataValidator.validate_transformation(df, local_vars['df'], state.target)
+            if not ok:
+                state.append_log(f"Preprocessing: validation failed - {reason}")
+                state.rollback_to(snapshot_version)
+                return state
+
             # Overwrite state.df with fully numeric DataFrame
             state.df = local_vars['df']
         except Exception as e:
