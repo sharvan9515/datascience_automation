@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import pandas as pd
 
 @dataclass
@@ -23,6 +23,7 @@ class PipelineState:
     best_code_blocks: dict[str, list[str]] = field(default_factory=dict)
     best_features: List[str] = field(default_factory=list)
     best_params: dict[str, object] = field(default_factory=dict)
+    profile: Optional[Dict[str, Any]] = None
     patience: int = 5
     no_improve_rounds: int = 0
     iteration: int = 0
@@ -80,6 +81,7 @@ class PipelineState:
                 k: v.copy() for k, v in self.best_code_blocks.items()
             },
             "best_features": list(self.best_features),
+            "profile": self.profile.copy() if isinstance(self.profile, dict) else self.profile,
         }
         return self._version
 
@@ -102,3 +104,8 @@ class PipelineState:
             k: v.copy() for k, v in snapshot["best_code_blocks"].items()
         }
         self.best_features = list(snapshot["best_features"])
+        self.profile = (
+            snapshot.get("profile").copy()
+            if isinstance(snapshot.get("profile"), dict)
+            else snapshot.get("profile")
+        )
