@@ -1,4 +1,4 @@
-from .validators import DataValidator
+from .validators import DataValidator, CodeQualityValidator
 from .dataset_profiler import EnhancedDatasetProfiler
 
-__all__ = ["DataValidator", "EnhancedDatasetProfiler"]
+__all__ = ["DataValidator", "CodeQualityValidator", "EnhancedDatasetProfiler"]

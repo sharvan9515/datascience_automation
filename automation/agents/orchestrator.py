@@ -12,6 +12,7 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from automation.pipeline_state import PipelineState
 from ..prompt_utils import query_llm
 from automation.utils.sandbox import safe_exec
+from automation.validators import CodeQualityValidator
 from .task_identification import Agent as TaskIdentificationAgent
 from .preprocessing import Agent as PreprocessingAgent
 from .correlation_eda import Agent as CorrelationEDAAgent
@@ -110,32 +111,10 @@ def _decide_steps(state: PipelineState) -> Dict[str, Dict[str, object]]:
 
 
 def _evaluate_preprocessing(snippet, df, target, task_type):
-    trial_df = df.copy()
-    try:
-        safe_exec(
-            snippet,
-            extra_globals={"pd": pd},
-            local_vars={"df": trial_df, "target": target},
-            allowed_modules={"pandas"},
-        )
-    except Exception as e:
-        return False, f"Preprocessing failed: {e}", None
-    # Data integrity check
-    if trial_df.isnull().sum().sum() > 0:
-        return False, "Preprocessing introduced new missing values", None
-    # Model performance check
-    X = trial_df.drop(columns=[target])
-    y = trial_df[target]
-    if task_type == "classification":
-        model = RandomForestClassifier(n_estimators=10, random_state=42)
-    else:
-        model = RandomForestRegressor(n_estimators=10, random_state=42)
-    try:
-        model.fit(X, y)
-        score = model.score(X, y)
-    except Exception as e:
-        return False, f"Model training failed after preprocessing: {e}", None
-    return True, f"Preprocessing accepted, model score: {score}", trial_df
+    ok, msg, new_df, _ = CodeQualityValidator.validate_preprocessing_code(
+        snippet, df, target, task_type
+    )
+    return ok, msg, new_df
 
 
 def _run_decided_steps(state: PipelineState) -> PipelineState:
@@ -176,98 +155,31 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
         if not run_step:
             continue
 
-        state = agent.run(state)
-
         for snippet in list(state.pending_code.get(stage, [])):
-            trial_df = state.df.copy()
-            env = {"pd": pd, "PCA": PCA}
-            local_vars = {"df": trial_df, "target": state.target}
-            try:
-                local_vars = safe_exec(
-                    snippet,
-                    state=state,
-                    extra_globals=env,
-                    local_vars=local_vars,
-                    allowed_modules={"pandas", "sklearn", "numpy", "xgboost"},
-                )
-            except Exception as exc:  # noqa: BLE001
-                state.append_log(f"{stage} snippet failed: {exc}")
-                retry_code = None
-                if stage == "feature_implementation":
-                    feat_desc = "; ".join(
-                        f"{name} = {state.feature_formulas.get(name, '')}"
-                        for name in state.features
+            ok, msg, trial_df, trial_score = CodeQualityValidator.validate_feature_code(
+                snippet, state.df, state.target, task_type
+            )
+            if not ok:
+                state.append_log(f"{stage}: validation failed - {msg}")
+                state.pending_code[stage] = []
+                state = agent.run(state)
+                retry_snips = list(state.pending_code.get(stage, []))
+                if retry_snips:
+                    snippet = retry_snips[0]
+                    ok, msg, trial_df, trial_score = CodeQualityValidator.validate_feature_code(
+                        snippet, state.df, state.target, task_type
                     )
-                    prompt = (
-                        "The previous code for implementing features failed with "
-                        f"error: {exc}. The intended features are: {feat_desc}. "
-                        "Provide corrected pandas code in JSON with key 'code'."
-                    )
-                    try:
-                        llm_raw = _query_llm(prompt)
-                        parsed = json.loads(llm_raw)
-                        retry_code = parsed.get("code")
-                    except RuntimeError as e:  # noqa: BLE001
-                        state.append_log(f"FeatureImplementation retry LLM failed: {e}")
-                    except Exception as e:  # noqa: BLE001
-                        state.append_log(f"FeatureImplementation retry parse failed: {e}")
-
-                if retry_code:
-                    try:
-                        local_vars = safe_exec(
-                            retry_code,
-                            state=state,
-                            extra_globals=env,
-                            local_vars=local_vars,
-                            allowed_modules={"pandas", "sklearn", "numpy", "xgboost"},
-                        )
-                        state.append_log("FeatureImplementation retry succeeded")
-                        snippet = retry_code
-                    except Exception as exc2:  # noqa: BLE001
-                        state.append_log(f"FeatureImplementation retry failed: {exc2}")
-                        state.snippet_history.append(
-                            {
-                                "iteration": state.iteration,
-                                "stage": stage,
-                                "snippet": retry_code,
-                                "accepted": False,
-                                "score": None,
-                            }
-                        )
-                        continue
-                else:
+                    state.append_log(f"{stage}: retry validation result - {msg}")
+                if not ok:
                     state.snippet_history.append(
-                        {
-                            "iteration": state.iteration,
-                            "stage": stage,
-                            "snippet": snippet,
-                            "accepted": False,
-                            "score": None,
-                        }
+                        {"iteration": state.iteration, "stage": stage, "snippet": snippet, "accepted": False, "score": None}
                     )
                     continue
+            else:
+                state.append_log(f"{stage}: validation passed - {msg}")
 
-            trial_df = local_vars.get("df", trial_df)
-            try:
-                trial_score = _compute_score(
-                    trial_df, state.target, task_type
-                )
-            except Exception as exc:  # noqa: BLE001
-                state.append_log(f"{stage}: scoring failed: {exc}")
-                state.snippet_history.append(
-                    {
-                        "iteration": state.iteration,
-                        "stage": stage,
-                        "snippet": snippet,
-                        "accepted": False,
-                        "score": None,
-                    }
-                )
-                continue
-
-            # Accept features that are neutral or slightly negative (within delta)
-            delta = 0.05  # Increased from 0.01
-            new_cols = set()  # Ensure new_cols is always defined
+            delta = 0.05
+            new_cols = set()
             if trial_score >= (state.current_score or 0.0) - delta:
                 delta_score = trial_score - (state.current_score or 0.0)
                 state.append_log(f"{stage}: accepted snippet ({'+' if delta_score >= 0 else ''}{delta_score:.4f} score, allowed by relaxed delta)")
@@ -275,7 +187,6 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
                     new_cols = set(trial_df.columns) - set(state.df.columns) if hasattr(trial_df, 'columns') and hasattr(state.df, 'columns') else set()
                     if new_cols:
                         state.append_log(f"FeatureImplementation: added features {sorted(new_cols)}")
-                    # Always append accepted feature engineering code to code_blocks for assembler
                     state.append_code(stage, snippet)
                 if trial_df is not None and isinstance(trial_df, pd.DataFrame):
                     state.df = cast(pd.DataFrame, trial_df)
@@ -284,35 +195,19 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
                 state.current_score = trial_score
                 state.append_code(stage, snippet)
                 state.snippet_history.append(
-                    {
-                        "iteration": state.iteration,
-                        "stage": stage,
-                        "snippet": snippet,
-                        "accepted": True,
-                        "score": trial_score,
-                    }
+                    {"iteration": state.iteration, "stage": stage, "snippet": snippet, "accepted": True, "score": trial_score}
                 )
-                # Keep a rolling window of accepted features (for synergy)
                 rolling_features = getattr(state, 'rolling_features', [])
                 rolling_features.append(list(new_cols))
                 setattr(state, 'rolling_features', rolling_features)
                 state.append_log(f"FeatureTracker: rolling window of accepted features: {rolling_features[-5:]}")
                 state.append_log(f"FeatureTracker: accepted feature implementation in {stage} with score {trial_score:.4f}")
             else:
-                state.append_log(
-                    f"{stage}: rejected snippet ({trial_score:.4f} < {state.current_score:.4f} - delta)"
-                )
+                state.append_log(f"{stage}: rejected snippet ({trial_score:.4f} < {state.current_score:.4f} - delta)")
                 state.snippet_history.append(
-                    {
-                        "iteration": state.iteration,
-                        "stage": stage,
-                        "snippet": snippet,
-                        "accepted": False,
-                        "score": trial_score,
-                    }
+                    {"iteration": state.iteration, "stage": stage, "snippet": snippet, "accepted": False, "score": trial_score}
                 )
                 state.append_log(f"FeatureTracker: rejected feature implementation in {stage} with score {trial_score:.4f}")
-
         state.pending_code[stage] = []
 
     state = ModelTrainingAgent().run(state)
