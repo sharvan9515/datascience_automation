@@ -1,7 +1,7 @@
 import json
 import pandas as pd
 from automation.pipeline_state import PipelineState
-from ..prompt_utils import query_llm
+from ..prompt_utils import query_llm, create_context_aware_prompt
 from .base import BaseAgent
 from automation.utils.sandbox import safe_exec
 from automation.validators import DataValidator
@@ -46,7 +46,9 @@ class Agent(BaseAgent):
         missing = df.isnull().sum().to_dict()
         unique_counts = {col: int(df[col].nunique(dropna=False)) for col in df.columns}
         # Dynamically build the prompt
+        context = create_context_aware_prompt(state.profile, state.task_type or 'classification', stage_name)
         base_prompt = (
+            f"{context}\n"
             f"You are a data preprocessing assistant.\n"
             f"Given a pandas DataFrame `df` with the following:\n"
             f"schema = {json.dumps(schema)}\n"

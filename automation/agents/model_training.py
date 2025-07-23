@@ -7,7 +7,7 @@ import os
 import joblib
 
 from automation.pipeline_state import PipelineState
-from ..prompt_utils import query_llm
+from ..prompt_utils import query_llm, create_context_aware_prompt
 from .base import BaseAgent
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, r2_score
@@ -66,7 +66,9 @@ class Agent(BaseAgent):
         )
 
     # Ask the LLM for an appropriate algorithm and params
+        context = create_context_aware_prompt(state.profile, state.task_type or 'classification', 'model training')
         prompt = (
+            f"{context}\n"
             "Select an appropriate model (choose from: LogisticRegression, RandomForestClassifier, SVC, XGBClassifier, LGBMClassifier for classification; LinearRegression, RandomForestRegressor, SVR, XGBRegressor, LGBMRegressor for regression) and basic hyperparameters "
             f"for a {state.task_type} task with {len(df)} samples and "
             f"{X.shape[1]} features. Respond in JSON with keys 'model' and 'params'."
