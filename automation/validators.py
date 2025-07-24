@@ -1,5 +1,22 @@
 import numpy as np
 import pandas as pd
+import re
+
+IMPORT_FIXES = {
+    'train_test_split': 'from sklearn.model_selection import train_test_split',
+    'GridSearchCV': 'from sklearn.model_selection import GridSearchCV',
+}
+
+
+def inject_missing_imports(code: str) -> str:
+    """Prepend common sklearn imports if used but missing."""
+    imports = []
+    for keyword, stmt in IMPORT_FIXES.items():
+        if keyword in code and stmt not in code:
+            imports.append(stmt)
+    if imports:
+        code = "\n".join(imports) + "\n" + code
+    return code
 
 
 class DataValidator:
@@ -60,6 +77,7 @@ class CodeQualityValidator:
         from automation.utils.sandbox import safe_exec
         from automation.agents import model_evaluation
 
+        code = inject_missing_imports(code)
         try:
             ast.parse(code)
         except SyntaxError as e:

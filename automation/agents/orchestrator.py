@@ -13,6 +13,7 @@ from automation.pipeline_state import PipelineState
 from ..prompt_utils import query_llm
 from automation.utils.sandbox import safe_exec
 from automation.validators import CodeQualityValidator
+from automation.utils import safe_json_parse
 from .task_identification import TaskIdentificationAgent
 from .preprocessing import PreprocessingAgent
 from .correlation_eda import CorrelationEDAAgent
@@ -94,7 +95,7 @@ class Orchestrator:
             state.append_log(f"Orchestrator: LLM query failed: {exc}")
             return {}
         try:
-            parsed = json.loads(llm_raw)
+            parsed = safe_json_parse(llm_raw)
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError(f"Failed to parse LLM response: {exc}") from exc
 

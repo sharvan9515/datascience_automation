@@ -5,6 +5,7 @@ from ..prompt_utils import query_llm, create_context_aware_prompt
 from .base import BaseAgent
 from automation.utils.sandbox import safe_exec
 from automation.validators import DataValidator
+from automation.utils import safe_json_parse
 
 
 def _query_llm(prompt: str) -> str:
@@ -89,17 +90,12 @@ class PreprocessingAgent(BaseAgent):
             state.append_log(f"Preprocessing: LLM query failed: {exc}")
             return state
         try:
-            parsed = json.loads(llm_resp)
-        except json.JSONDecodeError as exc:
-            state.append_log(f"Preprocessing: Failed to parse LLM response: {exc}. Raw response: {llm_resp}")
-            # Try to auto-correct common JSON issues (single to double quotes)
-            fixed_resp = llm_resp.replace("'", '"')
-            try:
-                parsed = json.loads(fixed_resp)
-                state.append_log("Preprocessing: Successfully parsed LLM response after auto-correction.")
-            except Exception as exc2:
-                state.append_log(f"Preprocessing: Still failed to parse LLM response after auto-correction: {exc2}. Skipping this step.")
-                return state
+            parsed = safe_json_parse(llm_resp)
+        except Exception as exc:
+            state.append_log(
+                f"Preprocessing: Failed to parse LLM response: {exc}. Raw response: {llm_resp}"
+            )
+            return state
 
         if 'code' not in parsed:
             raise RuntimeError("LLM response missing 'code' field")

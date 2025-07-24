@@ -2,6 +2,7 @@ import json
 from automation.pipeline_state import PipelineState
 from ..prompt_utils import query_llm
 from .base import BaseAgent
+from automation.utils import safe_json_parse
 
 
 def _query_llm(prompt: str) -> str:
@@ -36,8 +37,8 @@ class TaskIdentificationAgent(BaseAgent):
             state.append_log(f"TaskIdentification: LLM query failed: {exc}")
             return state
         try:
-            parsed = json.loads(llm_raw)
-        except json.JSONDecodeError as exc:
+            parsed = safe_json_parse(llm_raw)
+        except Exception as exc:
             raise RuntimeError(f"Failed to parse LLM response: {exc}") from exc
 
         if not isinstance(parsed, dict) or "task_type" not in parsed:
