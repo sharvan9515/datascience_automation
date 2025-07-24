@@ -15,7 +15,7 @@ class EnhancedDatasetProfiler:
     ) -> Dict[str, Any]:
         """Return a rich profiling summary for the given dataframe."""
         profile: Dict[str, Any] = {}
-        profile["statistical_summary"] = df.describe(include="all", datetime_is_numeric=True).to_dict()
+        profile["statistical_summary"] = df.describe(include="all").to_dict()
         profile["missing_patterns"] = cls._analyze_missing_patterns(df)
         profile["outlier_detection"] = cls._detect_outliers(df)
         profile["skewness"] = (

@@ -224,32 +224,6 @@ class Orchestrator:
         return state
 
 
-def is_model_ready(df, target):
-    """Return ``True`` if all features (except the target) are numeric and have no
-    missing values."""
-
-    import numpy as np
-
-    X = df.drop(columns=[target])
-    # ``exclude=[np.number]`` covers all numeric dtypes (int8, int16, float32, etc.)
-    non_numeric = X.select_dtypes(exclude=[np.number])
-    return non_numeric.empty and not X.isnull().any().any()
-
-def try_model_training(df, target, task_type):
-    from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-    X = df.drop(columns=[target])
-    y = df[target]
-    try:
-        if task_type == 'classification':
-            model = RandomForestClassifier(n_estimators=10, random_state=42)
-        else:
-            model = RandomForestRegressor(n_estimators=10, random_state=42)
-        model.fit(X, y)
-        return True
-    except Exception:
-        return False
-
-
     def run_pipeline(self, state: PipelineState, patience: int = 20, score_threshold: float = 0.80) -> PipelineState:
         """Run the pipeline with LLM-guided orchestration and iteration."""
         state.append_log("Orchestrator supervisor: booting pipeline")
@@ -347,6 +321,34 @@ def try_model_training(df, target, task_type):
         pprint.pprint(state.code_blocks.get('feature_selection', []))
         state = code_assembler.run(state)
         return state
+
+
+def is_model_ready(df, target):
+    """Return ``True`` if all features (except the target) are numeric and have no
+    missing values."""
+
+    import numpy as np
+
+    X = df.drop(columns=[target])
+    # ``exclude=[np.number]`` covers all numeric dtypes (int8, int16, float32, etc.)
+    non_numeric = X.select_dtypes(exclude=[np.number])
+    return non_numeric.empty and not X.isnull().any().any()
+
+def try_model_training(df, target, task_type):
+    from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+    X = df.drop(columns=[target])
+    y = df[target]
+    try:
+        if task_type == 'classification':
+            model = RandomForestClassifier(n_estimators=10, random_state=42)
+        else:
+            model = RandomForestRegressor(n_estimators=10, random_state=42)
+        model.fit(X, y)
+        return True
+    except Exception:
+        return False
+
+
 
 
 def run(state: PipelineState, patience: int = 20, score_threshold: float = 0.80) -> PipelineState:
