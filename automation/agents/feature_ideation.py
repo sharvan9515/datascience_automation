@@ -2,6 +2,7 @@ import json
 
 from automation.pipeline_state import PipelineState
 from ..prompt_utils import query_llm, create_context_aware_prompt
+from ..smart_feature_engineer import suggest_intelligent_features
 from .base import BaseAgent
 
 
@@ -105,10 +106,22 @@ class Agent(BaseAgent):
         )
         # --- Inject domain knowledge dynamically ---
         domain_knowledge = self._get_domain_knowledge(state)
-        context = create_context_aware_prompt(state.profile, state.task_type or 'classification', 'feature ideation')
+        heuristics = suggest_intelligent_features(state.df, state.target, state.profile)
+        heuristic_text = ""
+        if heuristics:
+            formatted = "; ".join(
+                f"{h['name']} = {h['formula']}" for h in heuristics[:3]
+            )
+            heuristic_text = f"Heuristic suggestions: {formatted}. "
+
+        context = create_context_aware_prompt(
+            state.profile,
+            state.task_type or 'classification',
+            'feature ideation',
+        )
         # Main prompt for the current dataset
         prompt = (
-            f"{context}\n{domain_knowledge}\n"
+            f"{context}\n{domain_knowledge}\n{heuristic_text}"
             "You are a creative and domain-aware feature engineering assistant. "
             f"The current task type is {state.task_type}. "
             f"Existing features are: {existing}. "
