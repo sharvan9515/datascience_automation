@@ -43,8 +43,15 @@ def main(args: list[str] | None = None) -> None:
     parser.add_argument("--patience", type=int, default=20, help="Rounds without improvement before stopping")
     parser.add_argument("--score-threshold", type=float, default=0.80, help="Score threshold to trigger hyperparameter search")
     parsed = parser.parse_args(args)
-    final_state = run_pipeline(parsed.csv, parsed.target, patience=parsed.patience, score_threshold=parsed.score_threshold)
+    final_state = run_pipeline(
+        parsed.csv,
+        parsed.target,
+        patience=parsed.patience,
+        score_threshold=parsed.score_threshold,
+    )
     print_final_log(final_state)
+    final_state.write_log("output/pipeline.log")
+    print("Logs written to output/pipeline.log")
 
 
 if __name__ == "__main__":

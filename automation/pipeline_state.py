@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
+import os
 import pandas as pd
 
 @dataclass
@@ -120,3 +121,9 @@ class PipelineState:
         self.recommended_algorithms = list(snapshot.get("recommended_algorithms", []))
         self.timeseries_mode = snapshot.get("timeseries_mode", False)
         self.time_col = snapshot.get("time_col")
+
+    def write_log(self, file_path: str) -> None:
+        """Persist the current log to ``file_path``."""
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "w") as f:
+            f.write("\n".join(self.log))
