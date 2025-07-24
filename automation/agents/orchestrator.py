@@ -138,6 +138,7 @@ class Orchestrator:
         prev_best_score = state.best_score if state.best_score is not None else state.current_score
 
         decisions = self._decide_steps(state)
+        state.append_log(f"Orchestrator: step decisions {decisions}")
 
         if decisions.get("preprocessing", {}).get("run", True):
             state = self.STEP_AGENTS["preprocessing"].run(state)
@@ -310,16 +311,21 @@ class Orchestrator:
                 state.append_log(
                     "Hyperparameter search skipped after iterations (algorithms not recommended)."
                 )
-        import pprint
-        print("[DEBUG] state.pending_code['feature_implementation']:")
-        pprint.pprint(state.pending_code.get('feature_implementation', []))
-        print("[DEBUG] state.code_blocks['feature_implementation']:")
-        pprint.pprint(state.code_blocks.get('feature_implementation', []))
-        print("[DEBUG] state.pending_code['feature_selection']:")
-        pprint.pprint(state.pending_code.get('feature_selection', []))
-        print("[DEBUG] state.code_blocks['feature_selection']:")
-        pprint.pprint(state.code_blocks.get('feature_selection', []))
+        state.append_log(
+            "Iteration summary: pending feature_implementation="
+            f"{len(state.pending_code.get('feature_implementation', []))}, "
+            f"pending feature_selection={len(state.pending_code.get('feature_selection', []))}"
+        )
+        state.append_log(
+            "Current accepted snippets: feature_implementation="
+            f"{len(state.code_blocks.get('feature_implementation', []))}, "
+            f"feature_selection={len(state.code_blocks.get('feature_selection', []))}"
+        )
+        state.append_log(f"Best score so far: {state.best_score}")
         state = code_assembler.run(state)
+        state.append_log(
+            f"Orchestrator finished after {state.iteration} iterations with best score {state.best_score}"
+        )
         return state
 
 
