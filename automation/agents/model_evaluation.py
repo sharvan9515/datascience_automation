@@ -18,8 +18,7 @@ from sklearn.metrics import (
     mean_squared_error,
     r2_score,
 )
-from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
 __all__ = ["compute_score", "run"]
 
@@ -57,7 +56,7 @@ def compute_score(
         preds = model.predict(X_test)
         return f1_score(y_test, preds, average="weighted")
 
-    model = LinearRegression()
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
     model.fit(X_train, y_train)
     preds = model.predict(X_test)
     return r2_score(y_test, preds)
@@ -104,7 +103,7 @@ class ModelEvaluationAgent(BaseAgent):
             state.append_log(f"ModelEvaluation metrics:\n{metrics_str}")
             new_score = acc
         else:
-            model = LinearRegression()
+            model = RandomForestRegressor(n_estimators=100, random_state=42)
             model.fit(X_train, y_train)
             preds = model.predict(X_test)
 

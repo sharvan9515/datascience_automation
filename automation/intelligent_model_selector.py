@@ -34,32 +34,20 @@ class IntelligentModelSelector:
 
         if timeseries_mode:
             if task_type == "classification":
-                return ["XGBClassifier", "LGBMClassifier", "RandomForestClassifier"]
-            return ["XGBRegressor", "LGBMRegressor", "RandomForestRegressor"]
+                return ["XGBClassifier", "RandomForestClassifier"]
+            return ["XGBRegressor", "RandomForestRegressor"]
 
         if task_type == "classification":
-            if n_rows < 1000:
-                recommendations.extend(["LogisticRegression", "SVC"])
-            else:
-                recommendations.extend(["RandomForestClassifier", "XGBClassifier"])
+            recommendations.extend(["RandomForestClassifier", "XGBClassifier"])
 
             if imbalance and max(imbalance.values()) > 0.8:
                 recommendations.insert(0, "RandomForestClassifier")
                 recommendations.insert(0, "XGBClassifier")
 
-            if ratio > 1:
-                recommendations.append("LGBMClassifier")
-
             if noise > 0.1:
                 recommendations.append("RandomForestClassifier")
         else:
-            if n_rows < 1000:
-                recommendations.extend(["LinearRegression", "SVR"])
-            else:
-                recommendations.extend(["RandomForestRegressor", "XGBRegressor"])
-
-            if ratio > 1:
-                recommendations.append("LGBMRegressor")
+            recommendations.extend(["RandomForestRegressor", "XGBRegressor"])
 
             if noise > 0.1:
                 recommendations.append("RandomForestRegressor")
