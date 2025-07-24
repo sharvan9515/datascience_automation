@@ -118,6 +118,7 @@ class Agent(BaseAgent):
             state.profile,
             state.task_type or 'classification',
             'feature ideation',
+            state.recommended_algorithms,
         )
         # Main prompt for the current dataset
         prompt = (
