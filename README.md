@@ -39,6 +39,34 @@ streamlit run streamlit_app.py
 - The frontend is designed for ease of use and hides all intermediate logs and errors, focusing on results.
 - The `max-iter` logic is removed; only patience is used for early stopping.
 
+## Enhanced Profiling, Adaptive Model Selection, and Validation
+
+This repository now includes a more robust preprocessing and modeling pipeline:
+
+- **Enhanced Profiling** – `EnhancedDatasetProfiler` generates a detailed profile
+  of your dataset including missing-value patterns, outliers, correlations and
+  domain insights. These metrics guide subsequent agents in the pipeline.
+- **Adaptive Model Selection** – `IntelligentModelSelector` ranks potential
+  algorithms based on the dataset profile and task type. The pipeline trains the
+  recommended models first and can automatically switch if performance stalls.
+- **Validation Pipeline** – All code produced by the agents is checked with
+  `DataValidator` and `CodeQualityValidator` to ensure transformations are safe
+  and do not degrade model performance.
+
+### Minimal Example
+
+You can run the pipeline programmatically without the Streamlit UI:
+
+```python
+from automation.pipeline import run_pipeline, compile_log
+
+final_state = run_pipeline("data.csv", "target_column")
+print(compile_log(final_state))
+```
+
+This loads your CSV, performs profiling and adaptive model selection, validates
+each step, and prints the aggregated log when finished.
+
 ## Advanced Usage
 - You can still run the pipeline from the command line:
   ```bash
