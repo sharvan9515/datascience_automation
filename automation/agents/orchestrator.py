@@ -28,6 +28,7 @@ from ..intelligent_model_selector import IntelligentModelSelector
 from . import model_evaluation
 from .. import code_assembler
 from .baseline_agent import BaselineAgent
+from .timeseries_detection import TimeseriesDetectionAgent
 
 
 class Orchestrator:
@@ -43,10 +44,10 @@ class Orchestrator:
     }
 
 
-    def _compute_score(self, df: pd.DataFrame, target: str, task_type: str) -> float:
+    def _compute_score(self, df: pd.DataFrame, target: str, task_type: str, time_col: str | None = None) -> float:
         """Wrapper around :func:`model_evaluation.compute_score`."""
 
-        return model_evaluation.compute_score(df, target, task_type)
+        return model_evaluation.compute_score(df, target, task_type, time_col=time_col)
 
 
     def _query_llm(self, prompt: str) -> str:
@@ -127,7 +128,12 @@ class Orchestrator:
         task_type = state.task_type if state.task_type is not None else "classification"
 
         if state.current_score is None:
-            state.current_score = self._compute_score(state.df, state.target, task_type)
+            state.current_score = self._compute_score(
+                state.df,
+                state.target,
+                task_type,
+                time_col=state.time_col if state.timeseries_mode else None,
+            )
 
         prev_best_score = state.best_score if state.best_score is not None else state.current_score
 
@@ -197,7 +203,12 @@ class Orchestrator:
             else:
                 state.append_log("Orchestrator: skipping hyperparameter search (algorithms not recommended)")
 
-        state.current_score = self._compute_score(state.df, state.target, task_type)
+        state.current_score = self._compute_score(
+            state.df,
+            state.target,
+            task_type,
+            time_col=state.time_col if state.timeseries_mode else None,
+        )
 
         if state.best_score is not None and state.best_score > prev_best_score:
             state.best_df = state.df.copy()
@@ -253,12 +264,13 @@ def try_model_training(df, target, task_type):
             state.pending_code.setdefault(step, [])
             state.code_blocks.setdefault(step, [])
         state = TaskIdentificationAgent().run(state)
+        state = TimeseriesDetectionAgent().run(state)
         if state.profile is None:
             from automation.dataset_profiler import EnhancedDatasetProfiler
             state.append_log("Orchestrator: computing dataset profile")
             state.profile = EnhancedDatasetProfiler.generate_comprehensive_profile(state.df, state.target)
         state.recommended_algorithms = IntelligentModelSelector.select_optimal_algorithms(
-            state.profile, state.task_type or "classification"
+            state.profile, state.task_type or "classification", timeseries_mode=state.timeseries_mode
         )
         state.iteration = 0
         state.iterate = True

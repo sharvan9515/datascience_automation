@@ -25,6 +25,10 @@ class PipelineState:
     best_params: dict[str, object] = field(default_factory=dict)
     profile: Optional[Dict[str, Any]] = None
     recommended_algorithms: list[str] = field(default_factory=list)
+    # Flag for time series datasets
+    timeseries_mode: bool = False
+    # Detected primary time column
+    time_col: Optional[str] = None
     patience: int = 5
     no_improve_rounds: int = 0
     iteration: int = 0
@@ -84,6 +88,8 @@ class PipelineState:
             "best_features": list(self.best_features),
             "profile": self.profile.copy() if isinstance(self.profile, dict) else self.profile,
             "recommended_algorithms": list(self.recommended_algorithms),
+            "timeseries_mode": self.timeseries_mode,
+            "time_col": self.time_col,
         }
         return self._version
 
@@ -112,3 +118,5 @@ class PipelineState:
             else snapshot.get("profile")
         )
         self.recommended_algorithms = list(snapshot.get("recommended_algorithms", []))
+        self.timeseries_mode = snapshot.get("timeseries_mode", False)
+        self.time_col = snapshot.get("time_col")

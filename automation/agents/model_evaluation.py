@@ -29,7 +29,9 @@ def _query_llm(prompt: str) -> str:
     return query_llm(prompt, expect_json=True)
 
 
-def compute_score(df: pd.DataFrame, target: str, task_type: str) -> float:
+def compute_score(
+    df: pd.DataFrame, target: str, task_type: str, time_col: str | None = None
+) -> float:
     """Return a simple train/test score for the given dataset."""
 
     X = df.drop(columns=[target])
@@ -38,9 +40,19 @@ def compute_score(df: pd.DataFrame, target: str, task_type: str) -> float:
     for col in X.select_dtypes(include="object").columns:
         X[col] = X[col].astype("category").cat.codes
     X = X.fillna(0)
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
+    if time_col:
+        df_sorted = df.sort_values(time_col)
+        split_idx = int(len(df_sorted) * 0.8)
+        train_df = df_sorted.iloc[:split_idx]
+        test_df = df_sorted.iloc[split_idx:]
+        X_train = train_df.drop(columns=[target])
+        y_train = train_df[target]
+        X_test = test_df.drop(columns=[target])
+        y_test = test_df[target]
+    else:
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
     if task_type == "classification":
         model = RandomForestClassifier(n_estimators=100, random_state=42)
         model.fit(X_train, y_train)
@@ -66,9 +78,19 @@ class ModelEvaluationAgent(BaseAgent):
         for col in X.select_dtypes(include="object").columns:
             X[col] = X[col].astype("category").cat.codes
         X = X.fillna(0)
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42
-        )
+        if state.timeseries_mode and state.time_col:
+            df_sorted = df.sort_values(state.time_col)
+            split_idx = int(len(df_sorted) * 0.8)
+            train_df = df_sorted.iloc[:split_idx]
+            test_df = df_sorted.iloc[split_idx:]
+            X_train = train_df.drop(columns=[state.target])
+            y_train = train_df[state.target]
+            X_test = test_df.drop(columns=[state.target])
+            y_test = test_df[state.target]
+        else:
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=0.2, random_state=42
+            )
 
         if state.task_type == "classification":
             model = RandomForestClassifier(n_estimators=100, random_state=42)
