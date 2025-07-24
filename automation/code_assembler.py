@@ -32,6 +32,46 @@ IMPORT_MAP = {
 }
 ALWAYS_IMPORTS = ['import os', 'import pandas as pd']
 
+
+def _dedup_imports(lines: list[str]) -> list[str]:
+    """Return import lines with duplicates removed more thoroughly."""
+    norm_map: dict[str, set[str]] = {}
+    simple_imports: set[str] = set()
+    ordered: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("from ") and " import " in stripped:
+            match = re.match(r"from\s+(\S+)\s+import\s+(.+)", stripped)
+            if match:
+                module = match.group(1)
+                names = {n.strip() for n in match.group(2).split(",")}
+                if module not in norm_map:
+                    norm_map[module] = set()
+                    ordered.append(module)
+                norm_map[module].update(names)
+            else:
+                if stripped not in simple_imports:
+                    simple_imports.add(stripped)
+                    ordered.append(stripped)
+        elif stripped.startswith("import "):
+            canonical = re.sub(r"\s+", " ", stripped)
+            if canonical not in simple_imports:
+                simple_imports.add(canonical)
+                ordered.append(canonical)
+        else:
+            if stripped not in simple_imports:
+                simple_imports.add(stripped)
+                ordered.append(stripped)
+
+    result: list[str] = []
+    for item in ordered:
+        if item in norm_map:
+            names = ", ".join(sorted(norm_map[item]))
+            result.append(f"from {item} import {names}")
+        else:
+            result.append(item)
+    return result
+
 def run(state: PipelineState) -> PipelineState:
     """Assemble the final pipeline code and persist pipeline artifacts."""
     state.append_log("Code assembler supervisor: assembling pipeline")
@@ -85,6 +125,17 @@ def run(state: PipelineState) -> PipelineState:
             if l.strip():
                 preprocessing_code.append(l)
 
+    preprocessing_logs = [
+        msg.split("Preprocessing:", 1)[1].strip()
+        for msg in state.log
+        if msg.startswith("Preprocessing:")
+    ]
+    feature_logs = [
+        msg.split("FeatureImplementation:", 1)[1].strip()
+        for msg in state.log
+        if msg.startswith("FeatureImplementation:")
+    ]
+
     # 4. Build the full script
     # 4.1. Imports
     used_imports = set(ALWAYS_IMPORTS)
@@ -92,7 +143,9 @@ def run(state: PipelineState) -> PipelineState:
     for keyword, import_stmt in IMPORT_MAP.items():
         if re.search(rf'\b{keyword}\b', all_code):
             used_imports.add(import_stmt)
-    import_lines = sorted(used_imports)
+    if "cross_val_score" not in all_code:
+        used_imports.add('from sklearn.model_selection import cross_val_score')
+    import_lines = _dedup_imports(sorted(used_imports))
 
     need_helper = any(
         "ensure_numeric_features(" in l
@@ -101,12 +154,16 @@ def run(state: PipelineState) -> PipelineState:
 
     # Deduplicate lines while preserving order
     def dedup_lines(lines):
-        seen = set()
+        seen_imports = set()
         result = []
         for line in lines:
-            if line not in seen:
-                seen.add(line)
-                result.append(line)
+            canonical = line.strip()
+            if canonical.startswith("import ") or canonical.startswith("from "):
+                canonical = re.sub(r"\s+", " ", canonical)
+                if canonical in seen_imports:
+                    continue
+                seen_imports.add(canonical)
+            result.append(line)
         return result
 
     lines = []
@@ -133,21 +190,35 @@ def run(state: PipelineState) -> PipelineState:
     lines.append("")
     if engineered_features:
         lines.append(f"# Engineered features included in this pipeline: {sorted(engineered_features)}")
+    for log in feature_logs:
+        lines.append(f"# Feature step: {log}")
     lines.append("")
     # 4.2. Preprocessing
     if preprocessing_code:
         lines.append("# --- Preprocessing ---")
-        lines.extend(preprocessing_code)
+        for log in preprocessing_logs:
+            lines.append(f"# Step: {log}")
+        lines.append("try:")
+        lines.extend([f"    {l}" for l in preprocessing_code])
+        lines.append("except Exception as e:")
+        lines.append("    print(f'Preprocessing failed: {e}')")
         lines.append("")
     # 4.3. Feature Engineering
     if included_snippets:
         lines.append("# --- Feature Engineering ---")
-        lines.extend(included_snippets)
+        lines.append("try:")
+        lines.extend([f"    {l}" for l in included_snippets])
+        lines.append("except Exception as e:")
+        lines.append("    print(f'Feature engineering failed: {e}')")
         lines.append("")
     # 4.4. Modeling
     if modeling_code:
         lines.append("# --- Modeling ---")
         lines.extend(modeling_code)
+        lines.append("")
+    if "cross_val_score" not in all_code:
+        lines.append("cv_score = cross_val_score(model, X, y, cv=3).mean()")
+        lines.append("print('Cross-validation score:', cv_score)")
         lines.append("")
 
     # Deduplicate all lines before writing
