@@ -3,6 +3,10 @@
 import argparse
 import pandas as pd
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from a .env file if present
+load_dotenv()
 
 from automation.dataset_profiler import EnhancedDatasetProfiler
 

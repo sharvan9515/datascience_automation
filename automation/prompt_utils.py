@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from typing import Iterable, Tuple, Dict, Any
 import os
+from dotenv import load_dotenv
 import re
 import time
 import json
+
+# Load environment variables from a .env file if present
+load_dotenv()
 
 
 def query_llm(
