@@ -38,7 +38,12 @@ class BaselineAgent(BaseAgent):
 
     def run(self, state: PipelineState) -> PipelineState:
         state.append_log("BaselineAgent: running basic_template.py logic as baseline.")
-        df, model, score = run_basic_template(state.df.copy(), state.target, state.task_type)
+        df, model, score = run_basic_template(
+            state.df.copy(),
+            state.target,
+            state.task_type,
+            time_col=state.time_col if state.timeseries_mode else None,
+        )
         state.df = df
         state.best_score = score
         # Optionally, store model, logs, etc. in state
