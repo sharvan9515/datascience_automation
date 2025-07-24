@@ -24,6 +24,7 @@ from .model_training import Agent as ModelTrainingAgent
 from .model_evaluation import Agent as ModelEvaluationAgent
 from .hyperparameter_search import Agent as HyperparameterSearchAgent
 from .ensemble_agent import EnsembleAgent
+from ..intelligent_model_selector import IntelligentModelSelector
 from . import model_evaluation
 from .. import code_assembler
 from .baseline_agent import BaselineAgent
@@ -211,10 +212,27 @@ def _run_decided_steps(state: PipelineState) -> PipelineState:
         state.pending_code[stage] = []
 
     state = ModelTrainingAgent().run(state)
+    for snippet in list(state.pending_code.get("model_training", [])):
+        ok, msg, _, _ = CodeQualityValidator.validate_generic_code(
+            snippet, state.df, state.target, task_type
+        )
+        if ok:
+            state.append_code("model_training", snippet)
+            state.append_log(f"model_training: accepted snippet ({msg})")
+        else:
+            state.append_log(f"model_training: rejected snippet ({msg})")
+        state.pending_code["model_training"] = []
+
     state = ModelEvaluationAgent().run(state)
-    if state.no_improve_rounds >= max(1, state.patience // 2):
-        state.append_log("Orchestrator: triggering hyperparameter search")
-        state = HyperparameterSearchAgent().run(state)
+    run_hyper = state.no_improve_rounds >= max(1, state.patience // 2)
+    if run_hyper:
+        if any("randomforest" in alg.lower() for alg in state.recommended_algorithms):
+            state.append_log("Orchestrator: triggering hyperparameter search")
+            state = HyperparameterSearchAgent().run(state)
+        else:
+            state.append_log(
+                "Orchestrator: skipping hyperparameter search (algorithms not recommended)"
+            )
 
     state.current_score = _compute_score(state.df, state.target, task_type)
 
@@ -272,6 +290,17 @@ def run(state: PipelineState, patience: int = 20, score_threshold: float = 0.80)
         state.pending_code.setdefault(step, [])
         state.code_blocks.setdefault(step, [])
     state = TaskIdentificationAgent().run(state)
+    # Compute dataset profile if missing
+    if state.profile is None:
+        from automation.dataset_profiler import EnhancedDatasetProfiler
+        state.append_log("Orchestrator: computing dataset profile")
+        state.profile = EnhancedDatasetProfiler.generate_comprehensive_profile(
+            state.df, state.target
+        )
+    # Determine recommended algorithms
+    state.recommended_algorithms = IntelligentModelSelector.select_optimal_algorithms(
+        state.profile, state.task_type or 'classification'
+    )
     state.iteration = 0
     state.iterate = True
     agentic_attempts = 0
@@ -283,13 +312,14 @@ def run(state: PipelineState, patience: int = 20, score_threshold: float = 0.80)
             state = _run_decided_steps(state)
             agentic_attempts += 1
             prev_score = state.best_score
-            state = EnsembleAgent().run(state)
-            if (
-                state.best_score is not None
-                and prev_score is not None
-                and state.best_score > prev_score
-            ):
-                state.append_log("EnsembleAgent: ensemble improved the score.")
+            if len(state.recommended_algorithms) > 1:
+                state = EnsembleAgent().run(state)
+                if (
+                    state.best_score is not None
+                    and prev_score is not None
+                    and state.best_score > prev_score
+                ):
+                    state.append_log("EnsembleAgent: ensemble improved the score.")
         except Exception as exc:  # noqa: BLE001
             state.rollback_to(snapshot_version)
             state.append_log(
@@ -297,8 +327,15 @@ def run(state: PipelineState, patience: int = 20, score_threshold: float = 0.80)
             )
             break
         if state.no_improve_rounds >= patience:
-            state.append_log(f"No improvement for {patience} consecutive iterations. Triggering hyperparameter search.")
-            state = HyperparameterSearchAgent().run(state)
+            if any("randomforest" in alg.lower() for alg in state.recommended_algorithms):
+                state.append_log(
+                    f"No improvement for {patience} consecutive iterations. Triggering hyperparameter search."
+                )
+                state = HyperparameterSearchAgent().run(state)
+            else:
+                state.append_log(
+                    f"No improvement for {patience} rounds but hyperparameter search skipped (algorithms not recommended)."
+                )
             break
         # Check if data is model-ready and model training works
         ready = is_model_ready(state.df, state.target)
@@ -323,8 +360,13 @@ def run(state: PipelineState, patience: int = 20, score_threshold: float = 0.80)
         state.iteration += 1
     # After stopping due to patience, trigger hyperparameter search if not already done
     if state.no_improve_rounds >= patience:
-        state.append_log("Triggering hyperparameter search after iterations.")
-        state = HyperparameterSearchAgent().run(state)
+        if any("randomforest" in alg.lower() for alg in state.recommended_algorithms):
+            state.append_log("Triggering hyperparameter search after iterations.")
+            state = HyperparameterSearchAgent().run(state)
+        else:
+            state.append_log(
+                "Hyperparameter search skipped after iterations (algorithms not recommended)."
+            )
     # Before assembling final code, log the contents of pending_code and code_blocks for debugging
     import pprint
     print("[DEBUG] state.pending_code['feature_implementation']:")

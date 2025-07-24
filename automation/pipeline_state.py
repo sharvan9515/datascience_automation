@@ -24,6 +24,7 @@ class PipelineState:
     best_features: List[str] = field(default_factory=list)
     best_params: dict[str, object] = field(default_factory=dict)
     profile: Optional[Dict[str, Any]] = None
+    recommended_algorithms: list[str] = field(default_factory=list)
     patience: int = 5
     no_improve_rounds: int = 0
     iteration: int = 0
@@ -82,6 +83,7 @@ class PipelineState:
             },
             "best_features": list(self.best_features),
             "profile": self.profile.copy() if isinstance(self.profile, dict) else self.profile,
+            "recommended_algorithms": list(self.recommended_algorithms),
         }
         return self._version
 
@@ -109,3 +111,4 @@ class PipelineState:
             if isinstance(snapshot.get("profile"), dict)
             else snapshot.get("profile")
         )
+        self.recommended_algorithms = list(snapshot.get("recommended_algorithms", []))

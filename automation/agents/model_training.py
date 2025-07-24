@@ -71,8 +71,9 @@ class Agent(BaseAgent):
             state.profile,
             state.task_type or 'classification',
             'model training',
+            state.recommended_algorithms,
         )
-        recommended = IntelligentModelSelector.select_optimal_algorithms(
+        recommended = state.recommended_algorithms or IntelligentModelSelector.select_optimal_algorithms(
             state.profile,
             state.task_type or 'classification',
         )
@@ -133,7 +134,7 @@ class Agent(BaseAgent):
             "model.fit(X_train, y_train)\n"
             "joblib.dump(model, 'artifacts/model.pkl')"
         )
-        state.append_code(stage_name, code_snippet)
+        state.append_pending_code(stage_name, code_snippet)
 
         # Track the trained model for ensembling
         y_pred = model.predict(X_test)

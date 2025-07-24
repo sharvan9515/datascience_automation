@@ -114,6 +114,7 @@ def create_context_aware_prompt(
     profile: Dict[str, Any] | None,
     task_type: str,
     stage: str,
+    algorithms: list[str] | None = None,
 ) -> str:
     """Return a dataset-aware context string for LLM prompts."""
 
@@ -171,5 +172,8 @@ def create_context_aware_prompt(
         domain_parts.append(f"categorical cardinality {dict(list(cardinality.items())[:3])}")
     if domain_parts:
         lines.append("Domain characteristics: " + ", ".join(domain_parts) + ".")
+
+    if algorithms:
+        lines.append("Recommended algorithms: " + ", ".join(algorithms) + ".")
 
     return "\n".join(lines)

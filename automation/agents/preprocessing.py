@@ -46,7 +46,12 @@ class Agent(BaseAgent):
         missing = df.isnull().sum().to_dict()
         unique_counts = {col: int(df[col].nunique(dropna=False)) for col in df.columns}
         # Dynamically build the prompt
-        context = create_context_aware_prompt(state.profile, state.task_type or 'classification', stage_name)
+        context = create_context_aware_prompt(
+            state.profile,
+            state.task_type or 'classification',
+            stage_name,
+            state.recommended_algorithms,
+        )
         base_prompt = (
             f"{context}\n"
             f"You are a data preprocessing assistant.\n"
