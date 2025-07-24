@@ -3,6 +3,7 @@ from typing import List, Optional, Dict, Any
 import os
 import pandas as pd
 
+
 @dataclass
 class PipelineState:
     df: pd.DataFrame
@@ -41,6 +42,10 @@ class PipelineState:
     # Track all trained models for ensembling
     trained_models: list = field(default_factory=list)
 
+    # Working copy for safe experimentation
+    working_df: Optional[pd.DataFrame] = None
+    neutral_features: list[str] = field(default_factory=list)
+
     # Internal version counter and snapshots for rollback
     _version: int = field(default=0, init=False)
     _snapshots: dict[int, dict] = field(default_factory=dict, init=False)
@@ -59,17 +64,29 @@ class PipelineState:
 
     def add_trained_model(self, model, name, model_type, predictions=None, score=None):
         """Add a trained model and its metadata for ensembling."""
-        self.trained_models.append({
-            'model': model,
-            'name': name,
-            'type': model_type,
-            'predictions': predictions,
-            'score': score
-        })
+        self.trained_models.append(
+            {
+                "model": model,
+                "name": name,
+                "type": model_type,
+                "predictions": predictions,
+                "score": score,
+            }
+        )
 
     def get_trained_models(self):
         """Return all trained models and their metadata."""
         return self.trained_models
+
+    def reset_working_df(self) -> None:
+        """Create a fresh working copy of ``df`` for experimentation."""
+        self.working_df = self.df.copy()
+        self.neutral_features = []
+
+    def accept_working_df(self) -> None:
+        """Merge ``working_df`` into the main dataframe if it exists."""
+        if self.working_df is not None:
+            self.df = self.working_df.copy()
 
     def create_snapshot(self) -> int:
         """Create a deep copy of key fields and return the snapshot version."""
@@ -77,17 +94,21 @@ class PipelineState:
         self._version += 1
         self._snapshots[self._version] = {
             "df": self.df.copy(),
+            "working_df": (
+                self.working_df.copy() if self.working_df is not None else None
+            ),
             "code_blocks": {k: v.copy() for k, v in self.code_blocks.items()},
             "features": list(self.features),
+            "neutral_features": list(self.neutral_features),
             "iteration": self.iteration,
             "current_score": self.current_score,
             "best_score": self.best_score,
             "best_df": self.best_df.copy() if self.best_df is not None else None,
-            "best_code_blocks": {
-                k: v.copy() for k, v in self.best_code_blocks.items()
-            },
+            "best_code_blocks": {k: v.copy() for k, v in self.best_code_blocks.items()},
             "best_features": list(self.best_features),
-            "profile": self.profile.copy() if isinstance(self.profile, dict) else self.profile,
+            "profile": (
+                self.profile.copy() if isinstance(self.profile, dict) else self.profile
+            ),
             "recommended_algorithms": list(self.recommended_algorithms),
             "timeseries_mode": self.timeseries_mode,
             "time_col": self.time_col,
@@ -101,8 +122,14 @@ class PipelineState:
         if snapshot is None:
             raise ValueError(f"No snapshot for version {version}")
         self.df = snapshot["df"].copy()
+        self.working_df = (
+            snapshot.get("working_df").copy()
+            if isinstance(snapshot.get("working_df"), pd.DataFrame)
+            else None
+        )
         self.code_blocks = {k: v.copy() for k, v in snapshot["code_blocks"].items()}
         self.features = list(snapshot["features"])
+        self.neutral_features = list(snapshot.get("neutral_features", []))
         self.iteration = snapshot["iteration"]
         self.current_score = snapshot["current_score"]
         self.best_score = snapshot["best_score"]
