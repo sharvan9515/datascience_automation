@@ -227,9 +227,6 @@ class CodeAssembler:
             lines.append("")
 
         deduped_lines = dedup_lines(lines)
-        print("[DEBUG] Final deduplicated lines to be written to finalcode.py:")
-        for line in deduped_lines:
-            print(line)
         with open("finalcode.py", "w") as f:
             f.write("\n".join(deduped_lines))
 

@@ -12,15 +12,19 @@ if __name__ == "__main__":
     target = sys.argv[2]
     df = pd.read_csv(csv_path)
     state = PipelineState(df=df, target=target)
+    final_state = state
     try:
         final_state = run(state, patience=20)
     finally:
         # Always assemble code, even on error
-        code_assembler.run(state)
+        code_assembler.run(final_state)
+        final_state.write_log("output/pipeline.log")
     print("Agentic pipeline completed. Check logs and output for results.")
+    print(f"Final score: {final_state.best_score}")
     # Print iteration history for accuracy/score progression
     print("\nIteration History (score progression):")
     for entry in final_state.iteration_history:
         print(
             f"Iteration {entry['iteration']}: score={entry.get('best_score', 'N/A')}, metrics={entry.get('metrics', '')}"
         )
+    print("Logs written to output/pipeline.log")
