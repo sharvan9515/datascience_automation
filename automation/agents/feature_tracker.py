@@ -148,8 +148,8 @@ class FeatureTracker:
         }
 
 
-class Agent(BaseAgent):
-    """Feature tracking agent that maintains feature history and provides intelligent feedback."""
+class FeatureTrackerAgent(BaseAgent):
+    """Maintain feature history and provide intelligent feedback."""
     
     def __init__(self):
         self.tracker = FeatureTracker()
@@ -225,4 +225,5 @@ class Agent(BaseAgent):
 
 # Backwards compatible function API
 def run(state: PipelineState) -> PipelineState:
-    return Agent().run(state) 
+    """Backwards compatible function API."""
+    return FeatureTrackerAgent().run(state)

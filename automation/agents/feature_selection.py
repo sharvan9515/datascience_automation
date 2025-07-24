@@ -20,8 +20,8 @@ def _query_llm(prompt: str) -> str:
 
 
 
-class Agent(BaseAgent):
-    """Feature selection agent."""
+class FeatureSelectionAgent(BaseAgent):
+    """Evaluate candidate features and keep only useful ones."""
 
     def run(self, state: PipelineState) -> PipelineState:
         """Evaluate new features incrementally and keep only beneficial ones."""
@@ -108,4 +108,5 @@ class Agent(BaseAgent):
 
 # Backwards compatible function API
 def run(state: PipelineState) -> PipelineState:
-    return Agent().run(state)
+    """Backwards compatible function API."""
+    return FeatureSelectionAgent().run(state)

@@ -53,8 +53,8 @@ def compute_score(df: pd.DataFrame, target: str, task_type: str) -> float:
     return r2_score(y_test, preds)
 
 
-class Agent(BaseAgent):
-    """Model evaluation agent."""
+class ModelEvaluationAgent(BaseAgent):
+    """Evaluate model performance and track best scores."""
 
     def run(self, state: PipelineState) -> PipelineState:
         """Train a quick model, analyze metrics, and update state with hardcoded logic only."""
@@ -128,4 +128,5 @@ class Agent(BaseAgent):
 
 # Backwards compatible function API
 def run(state: PipelineState) -> PipelineState:
-    return Agent().run(state)
+    """Backwards compatible function API."""
+    return ModelEvaluationAgent().run(state)

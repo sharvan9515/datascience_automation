@@ -12,8 +12,8 @@ from .base import BaseAgent
 __all__ = ["run"]
 
 
-class Agent(BaseAgent):
-    """Hyperparameter search agent."""
+class HyperparameterSearchAgent(BaseAgent):
+    """Perform a simple grid search when performance stalls."""
 
     def run(self, state: PipelineState) -> PipelineState:
         """Run grid search to tune a RandomForest model."""
@@ -71,4 +71,5 @@ class Agent(BaseAgent):
 
 # Backwards compatible function API
 def run(state: PipelineState) -> PipelineState:
-    return Agent().run(state)
+    """Backwards compatible function API."""
+    return HyperparameterSearchAgent().run(state)

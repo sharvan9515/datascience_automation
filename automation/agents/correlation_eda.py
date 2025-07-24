@@ -10,8 +10,8 @@ def _query_llm(prompt: str) -> str:
     return query_llm(prompt)
 
 
-class Agent(BaseAgent):
-    """Correlation and EDA agent."""
+class CorrelationEDAAgent(BaseAgent):
+    """Summarize correlations and outliers for feature insights."""
 
     def run(self, state: PipelineState) -> PipelineState:
         """Compute correlations/outliers and summarize via LLM."""
@@ -75,4 +75,5 @@ class Agent(BaseAgent):
 
 # Backwards compatible function API
 def run(state: PipelineState) -> PipelineState:
-    return Agent().run(state)
+    """Backwards compatible function API."""
+    return CorrelationEDAAgent().run(state)
