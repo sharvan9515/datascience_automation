@@ -13,15 +13,8 @@ from .base import BaseAgent
 from sklearn.model_selection import train_test_split
 from automation.time_aware_splitter import TimeAwareSplitter
 from sklearn.metrics import accuracy_score, r2_score
-from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.svm import SVC, SVR
 from xgboost import XGBClassifier, XGBRegressor
-try:
-    from lightgbm import LGBMClassifier, LGBMRegressor
-    HAS_LGBM = True
-except ImportError:
-    HAS_LGBM = False
 
 
 def _query_llm(prompt: str) -> str:
@@ -31,18 +24,11 @@ def _query_llm(prompt: str) -> str:
 
 
 MODEL_MAP = {
-    "logisticregression": LogisticRegression,
-    "linearregression": LinearRegression,
     "randomforestclassifier": RandomForestClassifier,
     "randomforestregressor": RandomForestRegressor,
-    "svc": SVC,
-    "svr": SVR,
     "xgbclassifier": XGBClassifier,
     "xgbregressor": XGBRegressor,
 }
-if HAS_LGBM:
-    MODEL_MAP["lgbmclassifier"] = LGBMClassifier
-    MODEL_MAP["lgbmregressor"] = LGBMRegressor
 
 
 def _normalize(name: str) -> str:
@@ -90,7 +76,7 @@ class ModelTrainingAgent(BaseAgent):
         rec_text = f"Recommended algorithms: {', '.join(recommended)}." if recommended else ''
         prompt = (
             f"{context}\n{rec_text}\n"
-            "Select an appropriate model (choose from: LogisticRegression, RandomForestClassifier, SVC, XGBClassifier, LGBMClassifier for classification; LinearRegression, RandomForestRegressor, SVR, XGBRegressor, LGBMRegressor for regression) and basic hyperparameters "
+            "Select an appropriate model (choose from: RandomForestClassifier, XGBClassifier for classification; RandomForestRegressor, XGBRegressor for regression) and basic hyperparameters "
             f"for a {state.task_type} task with {len(df)} samples and "
             f"{X.shape[1]} features. Respond in JSON with keys 'model' and 'params'."
         )
@@ -112,9 +98,6 @@ class ModelTrainingAgent(BaseAgent):
         model_cls = MODEL_MAP.get(model_name)
         if model_cls is None:
             raise RuntimeError(f"Unsupported model suggested by LLM: {model_name}")
-
-        if model_cls is LogisticRegression:
-            params.setdefault("max_iter", 500)
 
         state.append_log(
             f"ModelTraining: selected {model_cls.__name__} with params {params}"
