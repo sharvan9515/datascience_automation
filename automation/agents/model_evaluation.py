@@ -8,6 +8,7 @@ from ..prompt_utils import query_llm
 from .base import BaseAgent
 import pandas as pd
 from sklearn.model_selection import train_test_split
+from automation.time_aware_splitter import TimeAwareSplitter
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
@@ -41,10 +42,7 @@ def compute_score(
         X[col] = X[col].astype("category").cat.codes
     X = X.fillna(0)
     if time_col:
-        df_sorted = df.sort_values(time_col)
-        split_idx = int(len(df_sorted) * 0.8)
-        train_df = df_sorted.iloc[:split_idx]
-        test_df = df_sorted.iloc[split_idx:]
+        train_df, test_df = TimeAwareSplitter.chronological_split(df, time_col, test_size=0.2)
         X_train = train_df.drop(columns=[target])
         y_train = train_df[target]
         X_test = test_df.drop(columns=[target])
@@ -79,10 +77,9 @@ class ModelEvaluationAgent(BaseAgent):
             X[col] = X[col].astype("category").cat.codes
         X = X.fillna(0)
         if state.timeseries_mode and state.time_col:
-            df_sorted = df.sort_values(state.time_col)
-            split_idx = int(len(df_sorted) * 0.8)
-            train_df = df_sorted.iloc[:split_idx]
-            test_df = df_sorted.iloc[split_idx:]
+            train_df, test_df = TimeAwareSplitter.chronological_split(
+                df, state.time_col, test_size=0.2
+            )
             X_train = train_df.drop(columns=[state.target])
             y_train = train_df[state.target]
             X_test = test_df.drop(columns=[state.target])

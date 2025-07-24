@@ -11,6 +11,7 @@ from ..prompt_utils import query_llm, create_context_aware_prompt
 from ..intelligent_model_selector import IntelligentModelSelector
 from .base import BaseAgent
 from sklearn.model_selection import train_test_split
+from automation.time_aware_splitter import TimeAwareSplitter
 from sklearn.metrics import accuracy_score, r2_score
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
@@ -62,9 +63,18 @@ class ModelTrainingAgent(BaseAgent):
         for col in X.select_dtypes(include="object").columns:
             X[col] = X[col].astype("category").cat.codes
         X = X.fillna(0)
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42
-        )
+        if state.timeseries_mode and state.time_col:
+            train_df, test_df = TimeAwareSplitter.chronological_split(
+                df[[*X.columns, state.target]], state.time_col, test_size=0.2
+            )
+            X_train = train_df.drop(columns=[state.target])
+            y_train = train_df[state.target]
+            X_test = test_df.drop(columns=[state.target])
+            y_test = test_df[state.target]
+        else:
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=0.2, random_state=42
+            )
 
     # Ask the LLM for an appropriate algorithm and params
         context = create_context_aware_prompt(
@@ -126,10 +136,25 @@ class ModelTrainingAgent(BaseAgent):
 
         os.makedirs("artifacts", exist_ok=True)
         joblib.dump(model, "artifacts/model.pkl")
+        if state.timeseries_mode and state.time_col:
+            split_line = (
+                f"train_df, test_df = TimeAwareSplitter.chronological_split(df, '{state.time_col}', test_size=0.2)"
+            )
+            prep_lines = (
+                "X_train = train_df.drop(columns=['{target}'])\n"
+                "y_train = train_df['{target}']\n"
+                "X_test = test_df.drop(columns=['{target}'])\n"
+                "y_test = test_df['{target}']\n"
+            ).replace('{target}', state.target)
+        else:
+            split_line = "X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)"
+            prep_lines = ""
+
         code_snippet = (
             f"X = df.drop(columns=['{state.target}'])\n"
             f"y = df['{state.target}']\n"
-            "X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)\n"
+            f"{split_line}\n"
+            f"{prep_lines}"
             f"model = {model_cls.__name__}(**{params})\n"
             "model.fit(X_train, y_train)\n"
             "joblib.dump(model, 'artifacts/model.pkl')"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import joblib
 from sklearn.model_selection import train_test_split, GridSearchCV
+from automation.time_aware_splitter import TimeAwareSplitter
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
 from automation.pipeline_state import PipelineState
@@ -23,9 +24,17 @@ class HyperparameterSearchAgent(BaseAgent):
         for col in X.select_dtypes(include="object").columns:
             X[col] = X[col].astype("category").cat.codes
         X = X.fillna(0)
-        X_train, X_test, y_train, _ = train_test_split(
-            X, y, test_size=0.2, random_state=42
-        )
+        if state.timeseries_mode and state.time_col:
+            train_df, test_df = TimeAwareSplitter.chronological_split(
+                df[[*X.columns, state.target]], state.time_col, test_size=0.2
+            )
+            X_train = train_df.drop(columns=[state.target])
+            y_train = train_df[state.target]
+            X_test = test_df.drop(columns=[state.target])
+        else:
+            X_train, X_test, y_train, _ = train_test_split(
+                X, y, test_size=0.2, random_state=42
+            )
 
         if state.task_type == "classification":
             model = RandomForestClassifier(random_state=42)
