@@ -18,7 +18,7 @@ class IntelligentModelSelector:
 
     @classmethod
     def select_optimal_algorithms(
-        cls, profile: Dict[str, Any] | None, task_type: str
+        cls, profile: Dict[str, Any] | None, task_type: str, timeseries_mode: bool = False
     ) -> List[str]:
         """Return a prioritized list of algorithm names."""
         if profile is None:
@@ -31,6 +31,11 @@ class IntelligentModelSelector:
         n_rows = cls._dataset_size(profile)
 
         recommendations: List[str] = []
+
+        if timeseries_mode:
+            if task_type == "classification":
+                return ["XGBClassifier", "LGBMClassifier", "RandomForestClassifier"]
+            return ["XGBRegressor", "LGBMRegressor", "RandomForestRegressor"]
 
         if task_type == "classification":
             if n_rows < 1000:
