@@ -4,6 +4,7 @@ from automation.pipeline_state import PipelineState
 from ..prompt_utils import query_llm, create_context_aware_prompt
 from ..smart_feature_engineer import suggest_intelligent_features
 from .base import BaseAgent
+from automation.utils import safe_json_parse
 
 
 def _query_llm(prompt: str) -> str:
@@ -143,9 +144,11 @@ class FeatureIdeationAgent(BaseAgent):
             state.append_log(f"FeatureIdeation: LLM query failed: {exc}")
             return state
         try:
-            proposals = json.loads(llm_raw)
+            proposals = safe_json_parse(llm_raw)
         except Exception as exc:
-            state.append_log(f"FeatureIdeation: LLM response JSON parse failed: {exc}. Raw response: {llm_raw}")
+            state.append_log(
+                f"FeatureIdeation: LLM response JSON parse failed: {exc}. Raw response: {llm_raw}"
+            )
             # Retry with a simpler prompt
             simple_prompt = (
                 f"Given a pandas DataFrame with columns {existing}, propose up to 3 new features as a JSON list with keys 'name', 'formula', and 'rationale'."
@@ -158,10 +161,14 @@ class FeatureIdeationAgent(BaseAgent):
                     "LLM did not return any feature proposals after retry"
                 ) from exc2
             try:
-                proposals = json.loads(llm_raw_simple)
+                proposals = safe_json_parse(llm_raw_simple)
             except Exception as exc2:
-                state.append_log(f"FeatureIdeation: LLM simple prompt JSON parse failed: {exc2}. Raw response: {llm_raw_simple}")
-                raise RuntimeError(f"LLM did not return any feature proposals. Last response: {llm_raw_simple}")
+                state.append_log(
+                    f"FeatureIdeation: LLM simple prompt JSON parse failed: {exc2}. Raw response: {llm_raw_simple}"
+                )
+                raise RuntimeError(
+                    f"LLM did not return any feature proposals. Last response: {llm_raw_simple}"
+                )
         if isinstance(proposals, dict):
             # If it's a dict with feature keys, wrap in a list
             if all(k in proposals for k in ("name", "formula", "rationale")):

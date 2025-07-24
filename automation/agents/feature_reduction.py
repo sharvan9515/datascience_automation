@@ -7,6 +7,7 @@ import pandas as pd
 from automation.pipeline_state import PipelineState
 from ..prompt_utils import query_llm
 from .base import BaseAgent
+from automation.utils import safe_json_parse
 from sklearn.decomposition import PCA
 
 
@@ -56,7 +57,7 @@ class FeatureReductionAgent(BaseAgent):
             state.append_log(f"FeatureReduction: LLM query failed: {exc}")
             return state
         try:
-            parsed = json.loads(llm_raw)
+            parsed = safe_json_parse(llm_raw)
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError(f"Failed to parse LLM response: {exc}") from exc
 

@@ -10,6 +10,7 @@ from automation.pipeline_state import PipelineState
 from ..prompt_utils import query_llm, create_context_aware_prompt
 from ..intelligent_model_selector import IntelligentModelSelector
 from .base import BaseAgent
+from automation.utils import safe_json_parse
 from sklearn.model_selection import train_test_split
 from automation.time_aware_splitter import TimeAwareSplitter
 from sklearn.metrics import accuracy_score, r2_score
@@ -87,7 +88,7 @@ class ModelTrainingAgent(BaseAgent):
             state.append_log(f"ModelTraining: LLM query failed: {exc}")
             return state
         try:
-            parsed = json.loads(llm_raw)
+            parsed = safe_json_parse(llm_raw)
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError(f"Failed to parse LLM response: {exc}") from exc
 

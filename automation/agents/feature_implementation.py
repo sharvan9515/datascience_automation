@@ -16,6 +16,7 @@ from automation.validators import DataValidator
 from automation.pipeline_state import PipelineState
 from ..prompt_utils import query_llm
 from .base import BaseAgent
+from automation.utils import safe_json_parse
 
 
 
@@ -113,8 +114,8 @@ class FeatureImplementationAgent(BaseAgent):
             state.append_log(f"FeatureImplementation: LLM query failed: {exc}")
             return state
         try:
-            parsed: dict[str, object] = json.loads(llm_resp)
-        except json.JSONDecodeError as exc:
+            parsed: dict[str, object] = safe_json_parse(llm_resp)
+        except Exception as exc:
             raise RuntimeError(f"Failed to parse LLM response: {exc}") from exc
 
         if "code" not in parsed:
@@ -211,13 +212,15 @@ class FeatureImplementationAgent(BaseAgent):
                     "LLM did not return valid code for feature implementation"
                 ) from exc2
             try:
-                parsed = json.loads(fixed_code_json)
+                parsed = safe_json_parse(fixed_code_json)
                 fixed_code = parsed.get("code", "")
                 if not isinstance(fixed_code, str):
                     fixed_code = str(fixed_code)
                 fixed_code = inject_missing_imports(fixed_code)
             except Exception as e_json:
-                state.append_log(f"FeatureImplementation: LLM code retry JSON parse failed: {e_json}. Raw response: {fixed_code_json}")
+                state.append_log(
+                    f"FeatureImplementation: LLM code retry JSON parse failed: {e_json}. Raw response: {fixed_code_json}"
+                )
                 raise RuntimeError(f"LLM did not return valid code for feature implementation. Last response: {fixed_code_json}")
             try:
                 local_vars = safe_exec(
