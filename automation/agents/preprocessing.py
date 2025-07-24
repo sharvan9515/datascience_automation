@@ -29,8 +29,8 @@ def ensure_numeric_features(df, target, state=None):
     return df
 
 
-class Agent(BaseAgent):
-    """Preprocessing agent."""
+class PreprocessingAgent(BaseAgent):
+    """Handle data cleaning and encoding tasks before feature engineering."""
 
     def run(self, state: PipelineState) -> PipelineState:
         """Query the LLM for preprocessing code and store it for later execution."""
@@ -159,4 +159,5 @@ class Agent(BaseAgent):
 
 # Backwards compatible function API
 def run(state: PipelineState) -> PipelineState:
-    return Agent().run(state)
+    """Backwards compatible function API."""
+    return PreprocessingAgent().run(state)

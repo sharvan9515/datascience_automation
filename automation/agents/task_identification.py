@@ -10,8 +10,8 @@ def _query_llm(prompt: str) -> str:
     return query_llm(prompt, expect_json=True)
 
 
-class Agent(BaseAgent):
-    """Task identification agent."""
+class TaskIdentificationAgent(BaseAgent):
+    """Determine the ML task type and note any immediate data issues."""
 
     def run(self, state: PipelineState) -> PipelineState:
         df = state.df
@@ -54,4 +54,5 @@ class Agent(BaseAgent):
 
 # Backwards compatible function API
 def run(state: PipelineState) -> PipelineState:
-    return Agent().run(state)
+    """Backwards compatible function API."""
+    return TaskIdentificationAgent().run(state)

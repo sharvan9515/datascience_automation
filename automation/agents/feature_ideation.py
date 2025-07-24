@@ -12,8 +12,8 @@ def _query_llm(prompt: str) -> str:
     return query_llm(prompt, expect_json=True)
 
 
-class Agent(BaseAgent):
-    """Feature ideation agent."""
+class FeatureIdeationAgent(BaseAgent):
+    """Generate new feature ideas based on dataset context."""
 
     def _get_domain_knowledge(self, state: PipelineState) -> str:
         """Return a domain knowledge string for the current dataset, or empty string if unknown."""
@@ -193,4 +193,5 @@ class Agent(BaseAgent):
 
 # Backwards compatible function API
 def run(state: PipelineState) -> PipelineState:
-    return Agent().run(state)
+    """Backwards compatible function API."""
+    return FeatureIdeationAgent().run(state)

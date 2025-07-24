@@ -48,8 +48,8 @@ def _normalize(name: str) -> str:
     return name.replace(" ", "").lower()
 
 
-class Agent(BaseAgent):
-    """Model training agent."""
+class ModelTrainingAgent(BaseAgent):
+    """Train a selected model and record metrics."""
 
     def run(self, state: PipelineState) -> PipelineState:
         """Train a model suggested by the LLM and log metrics."""
@@ -151,4 +151,5 @@ class Agent(BaseAgent):
 
 # Backwards compatible function API
 def run(state: PipelineState) -> PipelineState:
-    return Agent().run(state)
+    """Backwards compatible function API."""
+    return ModelTrainingAgent().run(state)

@@ -67,8 +67,8 @@ def ensure_numeric_features(df, target, state=None):
     return df
 
 
-class Agent(BaseAgent):
-    """Feature implementation agent."""
+class FeatureImplementationAgent(BaseAgent):
+    """Turn feature ideas into executable pandas code snippets."""
 
     def run(self, state: PipelineState) -> PipelineState:
         """Generate pandas code for each feature and queue it for validation."""
@@ -246,4 +246,5 @@ class Agent(BaseAgent):
 
 # Backwards compatible function API
 def run(state: PipelineState) -> PipelineState:
-    return Agent().run(state)
+    """Backwards compatible function API."""
+    return FeatureImplementationAgent().run(state)

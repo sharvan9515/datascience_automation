@@ -16,8 +16,8 @@ def _query_llm(prompt: str) -> str:
     return query_llm(prompt, expect_json=True)
 
 
-class Agent(BaseAgent):
-    """Feature reduction agent."""
+class FeatureReductionAgent(BaseAgent):
+    """Decide on dimensionality reduction techniques like PCA."""
 
     def run(self, state: PipelineState) -> PipelineState:
         """Consult an LLM on PCA usage and queue PCA code if recommended."""
@@ -84,4 +84,5 @@ class Agent(BaseAgent):
 
 # Backwards compatible function API
 def run(state: PipelineState) -> PipelineState:
-    return Agent().run(state)
+    """Backwards compatible function API."""
+    return FeatureReductionAgent().run(state)
