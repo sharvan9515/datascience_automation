@@ -19,7 +19,6 @@ from .base import BaseAgent
 from automation.utils import safe_json_parse
 
 
-
 def _query_llm(prompt: str) -> str:
     """Wrapper around :func:`query_llm` with no examples."""
 
@@ -29,26 +28,35 @@ def _query_llm(prompt: str) -> str:
 def inject_missing_imports(code: str) -> str:
     imports = []
     # Unconditionally inject import re if 're' is used anywhere and not already imported
-    if 're' in code and 'import re' not in code:
-        imports.append('import re')
-    if 'np' in code and 'import numpy as np' not in code:
-        imports.append('import numpy as np')
-    if 'pd' in code and 'import pandas as pd' not in code:
-        imports.append('import pandas as pd')
-    if 'sklearn' in code and 'import sklearn' not in code:
-        imports.append('import sklearn')
-    if 'LabelEncoder' in code and 'from sklearn.preprocessing import LabelEncoder' not in code:
-        imports.append('from sklearn.preprocessing import LabelEncoder')
-    if 'OneHotEncoder' in code and 'from sklearn.preprocessing import OneHotEncoder' not in code:
-        imports.append('from sklearn.preprocessing import OneHotEncoder')
-    if 'SimpleImputer' in code and 'from sklearn.impute import SimpleImputer' not in code:
-        imports.append('from sklearn.impute import SimpleImputer')
-    if 'XGBClassifier' in code and 'from xgboost import XGBClassifier' not in code:
-        imports.append('from xgboost import XGBClassifier')
-    if 'XGBRegressor' in code and 'from xgboost import XGBRegressor' not in code:
-        imports.append('from xgboost import XGBRegressor')
+    if "re" in code and "import re" not in code:
+        imports.append("import re")
+    if "np" in code and "import numpy as np" not in code:
+        imports.append("import numpy as np")
+    if "pd" in code and "import pandas as pd" not in code:
+        imports.append("import pandas as pd")
+    if "sklearn" in code and "import sklearn" not in code:
+        imports.append("import sklearn")
+    if (
+        "LabelEncoder" in code
+        and "from sklearn.preprocessing import LabelEncoder" not in code
+    ):
+        imports.append("from sklearn.preprocessing import LabelEncoder")
+    if (
+        "OneHotEncoder" in code
+        and "from sklearn.preprocessing import OneHotEncoder" not in code
+    ):
+        imports.append("from sklearn.preprocessing import OneHotEncoder")
+    if (
+        "SimpleImputer" in code
+        and "from sklearn.impute import SimpleImputer" not in code
+    ):
+        imports.append("from sklearn.impute import SimpleImputer")
+    if "XGBClassifier" in code and "from xgboost import XGBClassifier" not in code:
+        imports.append("from xgboost import XGBClassifier")
+    if "XGBRegressor" in code and "from xgboost import XGBRegressor" not in code:
+        imports.append("from xgboost import XGBRegressor")
     if imports:
-        code = '\n'.join(imports) + '\n' + code
+        code = "\n".join(imports) + "\n" + code
     return code
 
 
@@ -58,12 +66,20 @@ def ensure_numeric_features(df, target, state=None):
             continue
         if not pd.api.types.is_numeric_dtype(df[col]):
             if state:
-                state.append_log(f"FeatureImplementation: Encoding non-numeric column '{col}' as categorical codes.")
-            df[col] = df[col].astype('category').cat.codes
+                state.append_log(
+                    f"FeatureImplementation: Encoding non-numeric column '{col}' as categorical codes."
+                )
+            df[col] = df[col].astype("category").cat.codes
         if df[col].isnull().any():
-            fill_value = df[col].mean() if pd.api.types.is_numeric_dtype(df[col]) else df[col].mode()[0]
+            fill_value = (
+                df[col].mean()
+                if pd.api.types.is_numeric_dtype(df[col])
+                else df[col].mode()[0]
+            )
             if state:
-                state.append_log(f"FeatureImplementation: Filling missing values in column '{col}' with {fill_value}.")
+                state.append_log(
+                    f"FeatureImplementation: Filling missing values in column '{col}' with {fill_value}."
+                )
             df[col] = df[col].fillna(fill_value)
     return df
 
@@ -84,14 +100,22 @@ class FeatureImplementationAgent(BaseAgent):
             return state
 
         # Ensure all non-numeric columns are encoded as numeric before feature engineering
-        for col in state.df.columns:
+        if state.working_df is None:
+            state.reset_working_df()
+        for col in state.working_df.columns:
             if col == state.target:
                 continue
-            if not pd.api.types.is_numeric_dtype(state.df[col]):
-                state.df[col] = state.df[col].astype('category').cat.codes
-                state.append_log(f"FeatureImplementation: Encoded non-numeric column '{col}' as category codes before feature engineering.")
+            if not pd.api.types.is_numeric_dtype(state.working_df[col]):
+                state.working_df[col] = (
+                    state.working_df[col].astype("category").cat.codes
+                )
+                state.append_log(
+                    f"FeatureImplementation: Encoded non-numeric column '{col}' as category codes before feature engineering."
+                )
 
-        schema = {col: str(state.df[col].dtype) for col in state.df.columns}
+        schema = {
+            col: str(state.working_df[col].dtype) for col in state.working_df.columns
+        }
 
         feature_descriptions = [
             f"{name} = {state.feature_formulas.get(name, '')}"
@@ -132,19 +156,19 @@ class FeatureImplementationAgent(BaseAgent):
             state.append_log(f"FeatureImplementation: {msg}")
 
         exec_globals = {
-            're': re,
-            'np': np,
-            'pd': pd,
-            'sklearn': sklearn,
-            'LabelEncoder': LabelEncoder,
-            'OneHotEncoder': OneHotEncoder,
-            'SimpleImputer': SimpleImputer,
-            'XGBClassifier': XGBClassifier,
-            'XGBRegressor': XGBRegressor,
+            "re": re,
+            "np": np,
+            "pd": pd,
+            "sklearn": sklearn,
+            "LabelEncoder": LabelEncoder,
+            "OneHotEncoder": OneHotEncoder,
+            "SimpleImputer": SimpleImputer,
+            "XGBClassifier": XGBClassifier,
+            "XGBRegressor": XGBRegressor,
         }
-        allowed = {'re', 'numpy', 'pandas', 'sklearn', 'xgboost'}
+        allowed = {"re", "numpy", "pandas", "sklearn", "xgboost"}
         try:
-            local_vars = {'df': state.df.copy(), 'target': state.target}
+            local_vars = {"df": state.working_df.copy(), "target": state.target}
             local_vars = safe_exec(
                 code,
                 state=state,
@@ -153,16 +177,23 @@ class FeatureImplementationAgent(BaseAgent):
                 allowed_modules=allowed,
             )
             # Ensure all features are numeric and have no missing values
-            local_vars['df'] = ensure_numeric_features(local_vars['df'], state.target, state)
-            ok, reason = DataValidator.validate_transformation(state.df, local_vars['df'], state.target)
+            local_vars["df"] = ensure_numeric_features(
+                local_vars["df"], state.target, state
+            )
+            ok, reason = DataValidator.validate_transformation(
+                state.working_df, local_vars["df"], state.target
+            )
             if not ok:
                 state.append_log(f"FeatureImplementation: validation failed - {reason}")
                 state.rollback_to(snapshot_version)
                 return state
         except (TypeError, AttributeError) as e:
-            state.append_log(f"FeatureImplementation: LLM code failed with error: {e}. Attempting to coerce only relevant columns to string and retry.")
+            state.append_log(
+                f"FeatureImplementation: LLM code failed with error: {e}. Attempting to coerce only relevant columns to string and retry."
+            )
             # Parse code to find columns used with .str or regex
             import re as _re
+
             str_cols = set()
             # Find df['col'].str or df["col"].str patterns
             for match in _re.finditer(r"df\[['\"]([\w_]+)['\"]\]\.str", code):
@@ -170,10 +201,10 @@ class FeatureImplementationAgent(BaseAgent):
             # Find regex usage: df['col'].apply(lambda x: re.search(...))
             for match in _re.finditer(r"df\[['\"]([\w_]+)['\"]\]\.apply\(lambda", code):
                 str_cols.add(match.group(1))
-            local_vars = {'df': state.df.copy(), 'target': state.target}
+            local_vars = {"df": state.working_df.copy(), "target": state.target}
             for col in str_cols:
-                if col in local_vars['df'].columns:
-                    local_vars['df'][col] = local_vars['df'][col].astype(str)
+                if col in local_vars["df"].columns:
+                    local_vars["df"][col] = local_vars["df"][col].astype(str)
             try:
                 local_vars = safe_exec(
                     code,
@@ -182,18 +213,30 @@ class FeatureImplementationAgent(BaseAgent):
                     local_vars=local_vars,
                     allowed_modules=allowed,
                 )
-                local_vars['df'] = ensure_numeric_features(local_vars['df'], state.target, state)
-                ok, reason = DataValidator.validate_transformation(state.df, local_vars['df'], state.target)
+                local_vars["df"] = ensure_numeric_features(
+                    local_vars["df"], state.target, state
+                )
+                ok, reason = DataValidator.validate_transformation(
+                    state.working_df, local_vars["df"], state.target
+                )
                 if not ok:
-                    state.append_log(f"FeatureImplementation: validation failed - {reason}")
+                    state.append_log(
+                        f"FeatureImplementation: validation failed - {reason}"
+                    )
                     state.rollback_to(snapshot_version)
                     return state
-                state.append_log("FeatureImplementation: Retry after selective coercion succeeded.")
+                state.append_log(
+                    "FeatureImplementation: Retry after selective coercion succeeded."
+                )
             except Exception as e2:
-                state.append_log(f"FeatureImplementation: Retry after selective coercion failed with error: {e2}. Skipping this feature.")
+                state.append_log(
+                    f"FeatureImplementation: Retry after selective coercion failed with error: {e2}. Skipping this feature."
+                )
                 return state
         except KeyError as e:
-            state.append_log(f"FeatureImplementation: Missing column error: {e}. Skipping this feature.")
+            state.append_log(
+                f"FeatureImplementation: Missing column error: {e}. Skipping this feature."
+            )
             return state
         except Exception as e:
             state.append_log(f"FeatureImplementation: LLM code failed with error: {e}")
@@ -221,7 +264,9 @@ class FeatureImplementationAgent(BaseAgent):
                 state.append_log(
                     f"FeatureImplementation: LLM code retry JSON parse failed: {e_json}. Raw response: {fixed_code_json}"
                 )
-                raise RuntimeError(f"LLM did not return valid code for feature implementation. Last response: {fixed_code_json}")
+                raise RuntimeError(
+                    f"LLM did not return valid code for feature implementation. Last response: {fixed_code_json}"
+                )
             try:
                 local_vars = safe_exec(
                     fixed_code,
@@ -231,18 +276,27 @@ class FeatureImplementationAgent(BaseAgent):
                     allowed_modules=allowed,
                 )
                 # Ensure all features are numeric and have no missing values
-                local_vars['df'] = ensure_numeric_features(local_vars['df'], state.target, state)
-                ok, reason = DataValidator.validate_transformation(state.df, local_vars['df'], state.target)
+                local_vars["df"] = ensure_numeric_features(
+                    local_vars["df"], state.target, state
+                )
+                ok, reason = DataValidator.validate_transformation(
+                    state.working_df, local_vars["df"], state.target
+                )
                 if not ok:
-                    state.append_log(f"FeatureImplementation: validation failed - {reason}")
+                    state.append_log(
+                        f"FeatureImplementation: validation failed - {reason}"
+                    )
                     state.rollback_to(snapshot_version)
                     return state
                 state.append_log("FeatureImplementation: LLM code retry succeeded.")
                 code = fixed_code
             except Exception as e2:
-                state.append_log(f"FeatureImplementation: LLM code retry failed with error: {e2}")
+                state.append_log(
+                    f"FeatureImplementation: LLM code retry failed with error: {e2}"
+                )
                 raise RuntimeError(f"LLM code retry failed with error: {e2}")
-        # After successful execution, always append the code to pending_code for tracking
+        # After successful execution, update working_df and queue the code
+        state.working_df = local_vars.get("df", state.working_df)
         state.append_pending_code(stage_name, code)
         return state
 
