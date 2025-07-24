@@ -17,6 +17,12 @@ This project provides an agentic, LLM-driven data science pipeline that automate
 pip install -r requirements.txt
 ```
 
+Create a `.env` file in the project root containing your OpenAI key:
+
+```bash
+echo "OPENAI_API_KEY=your-key-here" > .env
+```
+
 ### 2. Run the Streamlit Frontend
 ```bash
 streamlit run streamlit_app.py
