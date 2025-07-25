@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Utility functions for executing and validating generated code."""
+
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, r2_score
@@ -9,10 +11,45 @@ from automation.utils.sandbox import safe_exec
 from automation.validators import DataValidator
 
 __all__ = [
+    "CodeExecutionTool",
     "execute_preprocessing_code",
     "execute_feature_engineering_code",
     "test_model_performance",
 ]
+
+
+class CodeExecutionTool:
+    """Safely execute code snippets in a sandboxed environment."""
+
+    @staticmethod
+    def execute_code(code: str, context: dict) -> dict:
+        """Execute ``code`` with ``context`` as local variables.
+
+        Parameters
+        ----------
+        code:
+            Python code to execute.
+        context:
+            Dictionary of variables accessible to the code.
+
+        Returns
+        -------
+        dict
+            A dictionary containing ``success`` (bool), ``error`` (str or ``None``)
+            and ``locals`` (dict of variables after execution).
+        """
+
+        local_vars = context.copy()
+        try:
+            local_vars = safe_exec(
+                code,
+                extra_globals={"pd": pd},
+                local_vars=local_vars,
+                allowed_modules={"pandas", "numpy", "sklearn", "xgboost"},
+            )
+            return {"success": True, "error": None, "locals": local_vars}
+        except Exception as exc:  # noqa: BLE001
+            return {"success": False, "error": str(exc), "locals": local_vars}
 
 
 def execute_preprocessing_code(df: pd.DataFrame, code: str, target: str) -> pd.DataFrame:
