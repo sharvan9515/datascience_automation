@@ -42,10 +42,18 @@ def compute_score(
     X = X.fillna(0)
     if time_col:
         train_df, test_df = TimeAwareSplitter.chronological_split(df, time_col, test_size=0.2)
+        # Convert time column to numeric representation for modeling
+        for split_df in (train_df, test_df):
+            split_df[time_col] = pd.to_datetime(split_df[time_col], errors="coerce").map(pd.Timestamp.toordinal)
         X_train = train_df.drop(columns=[target])
         y_train = train_df[target]
         X_test = test_df.drop(columns=[target])
         y_test = test_df[target]
+        for col in X_train.select_dtypes(include="object").columns:
+            X_train[col] = X_train[col].astype("category").cat.codes
+            X_test[col] = X_test[col].astype("category").cat.codes
+        X_train = X_train.fillna(0)
+        X_test = X_test.fillna(0)
     else:
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, random_state=42
@@ -79,10 +87,19 @@ class ModelEvaluationAgent(BaseAgent):
             train_df, test_df = TimeAwareSplitter.chronological_split(
                 df, state.time_col, test_size=0.2
             )
+            for split_df in (train_df, test_df):
+                split_df[state.time_col] = pd.to_datetime(
+                    split_df[state.time_col], errors="coerce"
+                ).map(pd.Timestamp.toordinal)
             X_train = train_df.drop(columns=[state.target])
             y_train = train_df[state.target]
             X_test = test_df.drop(columns=[state.target])
             y_test = test_df[state.target]
+            for col in X_train.select_dtypes(include="object").columns:
+                X_train[col] = X_train[col].astype("category").cat.codes
+                X_test[col] = X_test[col].astype("category").cat.codes
+            X_train = X_train.fillna(0)
+            X_test = X_test.fillna(0)
         else:
             X_train, X_test, y_train, y_test = train_test_split(
                 X, y, test_size=0.2, random_state=42
