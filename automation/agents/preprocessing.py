@@ -4,6 +4,7 @@ from automation.pipeline_state import PipelineState
 from ..prompt_utils import query_llm, create_context_aware_prompt
 from .base import BaseAgent
 from automation.utils.sandbox import safe_exec
+from automation.utils import ensure_numeric_features
 from automation.validators import DataValidator
 from automation.utils import safe_json_parse
 
@@ -12,24 +13,6 @@ def _query_llm(prompt: str) -> str:
     """Wrapper around :func:`query_llm` with no examples."""
 
     return query_llm(prompt)
-
-
-def ensure_numeric_features(df, target, state=None):
-    for col in df.columns:
-        if col == target:
-            continue
-        if not pd.api.types.is_numeric_dtype(df[col]):
-            if state:
-                state.append_log(f"Preprocessing: Encoding non-numeric column '{col}' as categorical codes.")
-            df[col] = df[col].astype('category').cat.codes
-        if df[col].isnull().any():
-            fill_value = df[col].mean() if pd.api.types.is_numeric_dtype(df[col]) else df[col].mode()[0]
-            if state:
-                state.append_log(f"Preprocessing: Filling missing values in column '{col}' with {fill_value}.")
-            df[col] = df[col].fillna(fill_value)
-    return df
-
-
 class PreprocessingAgent(BaseAgent):
     """Handle data cleaning and encoding tasks before feature engineering."""
 
@@ -118,7 +101,9 @@ class PreprocessingAgent(BaseAgent):
                 local_vars=local_vars,
                 allowed_modules={'pandas'},
             )
-            local_vars['df'] = ensure_numeric_features(local_vars['df'], state.target, state)
+            local_vars['df'] = ensure_numeric_features(
+                local_vars['df'], state.target, state, prefix="Preprocessing: "
+            )
             # Post-LLM validation: check must_keep features
             missing_features = [f for f in must_keep if f in df.columns and f not in local_vars['df'].columns]
             if missing_features:
