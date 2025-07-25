@@ -1,54 +1,50 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from pydantic import BaseModel, Field
 
-@dataclass
-class DatasetProfile:
+
+class DatasetProfile(BaseModel):
     """Structured representation of dataset profiling results."""
 
-    statistical_summary: Dict[str, Dict[str, float]] = field(default_factory=dict)
-    missing_patterns: Dict[str, Any] = field(default_factory=dict)
-    outlier_detection: Dict[str, int] = field(default_factory=dict)
-    skewness: Dict[str, float] = field(default_factory=dict)
-    correlations: Dict[str, Any] = field(default_factory=dict)
-    domain_insights: Dict[str, Any] = field(default_factory=dict)
-    complexity_metrics: Dict[str, Any] = field(default_factory=dict)
+    statistical_summary: Dict[str, Dict[str, float]] = Field(default_factory=dict)
+    missing_patterns: Dict[str, Any] = Field(default_factory=dict)
+    outlier_detection: Dict[str, int] = Field(default_factory=dict)
+    skewness: Dict[str, float] = Field(default_factory=dict)
+    correlations: Dict[str, Any] = Field(default_factory=dict)
+    domain_insights: Dict[str, Any] = Field(default_factory=dict)
+    complexity_metrics: Dict[str, Any] = Field(default_factory=dict)
 
 
-@dataclass
-class PreprocessingPlan:
+class PreprocessingPlan(BaseModel):
     """Instructions and code for preprocessing the dataset."""
 
-    logs: List[str] = field(default_factory=list)
+    logs: List[str] = Field(default_factory=list)
     code: str = ""
     rationale: str = ""
-    dropped_columns: List[str] = field(default_factory=list)
-    encoded_columns: Dict[str, str] = field(default_factory=dict)
+    dropped_columns: List[str] = Field(default_factory=list)
+    encoded_columns: Dict[str, str] = Field(default_factory=dict)
 
 
-@dataclass
-class FeatureEngineeringPlan:
+class FeatureEngineeringPlan(BaseModel):
     """LLM-proposed features and implementation code."""
 
-    features: List[Dict[str, str]] = field(default_factory=list)
+    features: List[Dict[str, str]] = Field(default_factory=list)
     code: str = ""
     rationale: str = ""
 
 
-@dataclass
-class ModelTrainingPlan:
+class ModelTrainingPlan(BaseModel):
     """Model choice and training parameters."""
 
     algorithm: str = ""
-    parameters: Dict[str, Any] = field(default_factory=dict)
+    parameters: Dict[str, Any] = Field(default_factory=dict)
     cross_validation_folds: int = 5
-    metrics: Dict[str, float] = field(default_factory=dict)
+    metrics: Dict[str, float] = Field(default_factory=dict)
 
 
-@dataclass
-class PipelineDecision:
+class PipelineDecision(BaseModel):
     """Decision from the orchestrator about the next pipeline step."""
 
     proceed: bool = True
@@ -56,12 +52,10 @@ class PipelineDecision:
     next_step: Optional[str] = None
 
 
-@dataclass
-class FinalPipeline:
+class FinalPipeline(BaseModel):
     """Assembled pipeline code and final model results."""
 
-    code_blocks: Dict[str, List[str]] = field(default_factory=dict)
+    code_blocks: Dict[str, List[str]] = Field(default_factory=dict)
     model_path: Optional[str] = None
     score: Optional[float] = None
-    logs: List[str] = field(default_factory=list)
-
+    logs: List[str] = Field(default_factory=list)
