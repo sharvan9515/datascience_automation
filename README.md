@@ -76,7 +76,7 @@ each step, and prints the aggregated log when finished.
 ## Advanced Usage
 - You can still run the pipeline from the command line:
   ```bash
-  python run_agentic_pipeline.py <csv_path> <target_column> --patience 20
+  python main_pipeline.py <csv_path> <target_column>
   ```
 - All outputs and logs are saved in the `output/` directory.
 
