@@ -178,7 +178,8 @@ class Orchestrator:
                     continue
 
                 delta = 0.05
-                if trial_score >= (state.current_score or 0.0) - delta:
+                prev = state.current_score or 0.0
+                if trial_score >= prev - delta:
                     if isinstance(trial_df, pd.DataFrame):
                         state.working_df = trial_df
                     state.current_score = trial_score
@@ -191,6 +192,9 @@ class Orchestrator:
                             "accepted": True,
                             "score": trial_score,
                         }
+                    )
+                    state.append_log(
+                        f"{stage}: accepted snippet. score {prev:.4f} -> {trial_score:.4f}"
                     )
                 else:
                     state.append_log(
@@ -208,6 +212,7 @@ class Orchestrator:
             state.pending_code[stage] = []
             if stage == "feature_selection":
                 state.accept_working_df()
+            state.append_log(f"Score after {stage}: {state.current_score:.4f}")
 
         state = ModelTrainingAgent().run(state)
         for snippet in list(state.pending_code.get("model_training", [])):
@@ -234,12 +239,17 @@ class Orchestrator:
                     "Orchestrator: skipping hyperparameter search (algorithms not recommended)"
                 )
 
+        prev_score = state.current_score
         state.current_score = self._compute_score(
             state.df,
             state.target,
             task_type,
             time_col=state.time_col if state.timeseries_mode else None,
         )
+        if prev_score is not None:
+            state.append_log(
+                f"Post-evaluation score change: {prev_score:.4f} -> {state.current_score:.4f}"
+            )
 
         if state.best_score is not None and state.best_score > prev_best_score:
             state.best_df = state.df.copy()

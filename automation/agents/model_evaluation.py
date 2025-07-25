@@ -140,8 +140,15 @@ class ModelEvaluationAgent(BaseAgent):
         if improved:
             state.best_score = new_score
             state.no_improve_rounds = 0
+            delta = new_score - (prev_best or 0.0)
+            state.append_log(
+                f"ModelEvaluation: score improved by {delta:.4f} to {new_score:.4f}"
+            )
         else:
             state.no_improve_rounds += 1
+            state.append_log(
+                f"ModelEvaluation: no improvement (score {new_score:.4f})"
+            )
 
         state.iterate = state.no_improve_rounds < state.patience
 
