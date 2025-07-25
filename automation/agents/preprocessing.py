@@ -6,6 +6,7 @@ from .base import BaseAgent
 from automation.utils.sandbox import safe_exec
 from automation.validators import DataValidator
 from automation.utils import safe_json_parse
+from automation.utils.sandbox import ensure_numeric_features
 
 
 def _query_llm(prompt: str) -> str:
@@ -109,7 +110,7 @@ class PreprocessingAgent(BaseAgent):
             state.append_log(f"Preprocessing rationale: {rationale}")
         # Ensure all features are numeric and have no missing values
         try:
-            exec_globals = {'pd': pd}
+            exec_globals = {'pd': pd, 'ensure_numeric_features': ensure_numeric_features}
             local_vars = {'df': state.df.copy(), 'target': state.target}
             local_vars = safe_exec(
                 code,

@@ -17,6 +17,7 @@ from automation.pipeline_state import PipelineState
 from ..prompt_utils import query_llm
 from .base import BaseAgent
 from automation.utils import safe_json_parse
+from automation.utils.sandbox import ensure_numeric_features
 
 
 def _query_llm(prompt: str) -> str:
@@ -165,6 +166,7 @@ class FeatureImplementationAgent(BaseAgent):
             "SimpleImputer": SimpleImputer,
             "XGBClassifier": XGBClassifier,
             "XGBRegressor": XGBRegressor,
+            "ensure_numeric_features": ensure_numeric_features,
         }
         allowed = {"re", "numpy", "pandas", "sklearn", "xgboost"}
         try:

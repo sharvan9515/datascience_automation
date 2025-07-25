@@ -74,7 +74,7 @@ class CodeQualityValidator:
         allowed_modules: set[str],
     ) -> tuple[bool, str, pd.DataFrame | None, float | None]:
         import ast
-        from automation.utils.sandbox import safe_exec
+        from automation.utils.sandbox import safe_exec, ensure_numeric_features
         from automation.agents import model_evaluation
 
         code = inject_missing_imports(code)
@@ -88,7 +88,7 @@ class CodeQualityValidator:
             local_vars = {"df": trial_df, "target": target}
             safe_exec(
                 code,
-                extra_globals={"pd": pd},
+                extra_globals={"pd": pd, "ensure_numeric_features": ensure_numeric_features},
                 local_vars=local_vars,
                 allowed_modules=allowed_modules,
             )

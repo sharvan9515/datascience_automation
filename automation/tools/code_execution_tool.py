@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, r2_score
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
-from automation.utils.sandbox import safe_exec
+from automation.utils.sandbox import safe_exec, ensure_numeric_features
 from automation.validators import DataValidator
 
 __all__ = [
@@ -58,7 +58,7 @@ def execute_preprocessing_code(df: pd.DataFrame, code: str, target: str) -> pd.D
         local_vars = {"df": df.copy(), "target": target}
         local_vars = safe_exec(
             code,
-            extra_globals={"pd": pd},
+            extra_globals={"pd": pd, "ensure_numeric_features": ensure_numeric_features},
             local_vars=local_vars,
             allowed_modules={"pandas"},
         )
@@ -87,7 +87,7 @@ def execute_feature_engineering_code(df: pd.DataFrame, code: str, target: str) -
         local_vars = {"df": df.copy(), "target": target}
         local_vars = safe_exec(
             code,
-            extra_globals={"pd": pd},
+            extra_globals={"pd": pd, "ensure_numeric_features": ensure_numeric_features},
             local_vars=local_vars,
             allowed_modules={"pandas", "numpy", "sklearn", "xgboost"},
         )
