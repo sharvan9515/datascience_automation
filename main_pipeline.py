@@ -1,5 +1,8 @@
 """Asynchronous wrapper around the orchestrator-driven pipeline."""
 
+# TODO: Add resume functionality to reload a saved PipelineState and
+# continue execution without starting from scratch.
+
 from __future__ import annotations
 
 import argparse
