@@ -6,7 +6,7 @@ from automation.pipeline_state import PipelineState
 from ..prompt_utils import query_llm
 from . import model_evaluation
 from .base import BaseAgent
-from .preprocessing import ensure_numeric_features
+from automation.utils import ensure_numeric_features
 from automation.validators import DataValidator
 from concurrent.futures import ThreadPoolExecutor
 import sklearn.model_selection

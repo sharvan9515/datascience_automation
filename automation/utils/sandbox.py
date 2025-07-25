@@ -1,5 +1,6 @@
 import ast
 from typing import Any, Dict, Optional, Set
+import pandas as pd
 
 from automation.pipeline_state import PipelineState
 
@@ -80,3 +81,22 @@ def safe_exec(
     exec_locals: Dict[str, Any] = local_vars.copy() if local_vars else {}
     exec(code, env, exec_locals)
     return exec_locals
+
+
+def ensure_numeric_features(df, target, state=None, prefix=""):
+    """Ensure all non-target columns are numeric and fill missing values."""
+    for col in df.columns:
+        if col == target:
+            continue
+        if not pd.api.types.is_numeric_dtype(df[col]):
+            if state:
+                state.append_log(f"{prefix}Encoding non-numeric column '{col}' as categorical codes.")
+            df[col] = df[col].astype("category").cat.codes
+        if df[col].isnull().any():
+            fill_value = df[col].mean() if pd.api.types.is_numeric_dtype(df[col]) else df[col].mode()[0]
+            if state:
+                state.append_log(
+                    f"{prefix}Filling missing values in column '{col}' with {fill_value}."
+                )
+            df[col] = df[col].fillna(fill_value)
+    return df

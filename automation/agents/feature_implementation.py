@@ -11,6 +11,7 @@ from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from sklearn.impute import SimpleImputer
 from xgboost import XGBClassifier, XGBRegressor
 from automation.utils.sandbox import safe_exec
+from automation.utils import ensure_numeric_features
 from automation.validators import DataValidator
 
 from automation.pipeline_state import PipelineState
@@ -58,30 +59,6 @@ def inject_missing_imports(code: str) -> str:
     if imports:
         code = "\n".join(imports) + "\n" + code
     return code
-
-
-def ensure_numeric_features(df, target, state=None):
-    for col in df.columns:
-        if col == target:
-            continue
-        if not pd.api.types.is_numeric_dtype(df[col]):
-            if state:
-                state.append_log(
-                    f"FeatureImplementation: Encoding non-numeric column '{col}' as categorical codes."
-                )
-            df[col] = df[col].astype("category").cat.codes
-        if df[col].isnull().any():
-            fill_value = (
-                df[col].mean()
-                if pd.api.types.is_numeric_dtype(df[col])
-                else df[col].mode()[0]
-            )
-            if state:
-                state.append_log(
-                    f"FeatureImplementation: Filling missing values in column '{col}' with {fill_value}."
-                )
-            df[col] = df[col].fillna(fill_value)
-    return df
 
 
 class FeatureImplementationAgent(BaseAgent):
@@ -178,7 +155,7 @@ class FeatureImplementationAgent(BaseAgent):
             )
             # Ensure all features are numeric and have no missing values
             local_vars["df"] = ensure_numeric_features(
-                local_vars["df"], state.target, state
+                local_vars["df"], state.target, state, prefix="FeatureImplementation: "
             )
             ok, reason = DataValidator.validate_transformation(
                 state.working_df, local_vars["df"], state.target
@@ -214,7 +191,7 @@ class FeatureImplementationAgent(BaseAgent):
                     allowed_modules=allowed,
                 )
                 local_vars["df"] = ensure_numeric_features(
-                    local_vars["df"], state.target, state
+                    local_vars["df"], state.target, state, prefix="FeatureImplementation: "
                 )
                 ok, reason = DataValidator.validate_transformation(
                     state.working_df, local_vars["df"], state.target
@@ -277,7 +254,7 @@ class FeatureImplementationAgent(BaseAgent):
                 )
                 # Ensure all features are numeric and have no missing values
                 local_vars["df"] = ensure_numeric_features(
-                    local_vars["df"], state.target, state
+                    local_vars["df"], state.target, state, prefix="FeatureImplementation: "
                 )
                 ok, reason = DataValidator.validate_transformation(
                     state.working_df, local_vars["df"], state.target
