@@ -7,3 +7,5 @@ xgboost>=1.7.0
 lightgbm>=3.3.5
 streamlit>=1.26.0
 python-dotenv>=1.0.0
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
