@@ -14,7 +14,6 @@ from .baseline_agent import BaselineAgent
 from .ensemble_agent import EnsembleAgent
 from .feature_tracker import FeatureTrackerAgent
 from .orchestrator import Orchestrator
-from .deterministic_orchestrator import DeterministicOrchestrator
 
 __all__ = [
     "BaseAgent",
@@ -33,5 +32,4 @@ __all__ = [
     "EnsembleAgent",
     "FeatureTrackerAgent",
     "Orchestrator",
-    "DeterministicOrchestrator",
 ]

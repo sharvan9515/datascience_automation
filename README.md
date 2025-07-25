@@ -64,14 +64,19 @@ This repository now includes a more robust preprocessing and modeling pipeline:
 You can run the pipeline programmatically without the Streamlit UI:
 
 ```python
-from automation.pipeline import run_pipeline, compile_log
+import asyncio
+from main_pipeline import DataSciencePipeline
 
-final_state = run_pipeline("data.csv", "target_column")
-print(compile_log(final_state))
+async def main():
+    pipeline = DataSciencePipeline("data.csv", "target_column")
+    final = await pipeline.run()
+    print("Final score:", final.score)
+
+asyncio.run(main())
 ```
 
 This loads your CSV, performs profiling and adaptive model selection, validates
-each step, and prints the aggregated log when finished.
+each step, and reports the final score when finished.
 
 ## Advanced Usage
 - You can still run the pipeline from the command line:
